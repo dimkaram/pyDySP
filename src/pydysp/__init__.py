@@ -1,6 +1,7 @@
 # __init__.py
 from .channel import Channel
 from .test import Test
+from .campaign import Campaign
 from .spectra import FourierSpectrum, WelchSpectrum
 from .arias import AriasResult
 from .response import ResponseSpectrum
@@ -18,6 +19,7 @@ __all__ = [
     # Main classes
     "Channel",
     "Test",
+    "Campaign",
     # Additional classes
     "FourierSpectrum",
     "WelchSpectrum",
