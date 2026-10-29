@@ -264,31 +264,83 @@ def test_overlay_into_given_axes_and_options(camp):
     plt.close("all")
 
 
-def test_heatmap(camp):
+def test_heatmap_orientation_and_cells(camp):
+    # Numbers 1, 2, 3, 5, 6: test number along x, frequency along y
     tf = camp.transfer_function("In", "Out", nperseg=1024)
     fig, axes = plt.subplots(1, 2)
     ax = tf.plot(kind="heatmap", ax=axes[0], fmax=50)
-    assert ax is axes[0]
+    assert ax is axes[0] and ax.figure is fig
     mesh = ax.collections[0]
     data = mesh.get_array()
-    # One stripe per test (rows), frequencies up to fmax (columns)
-    n_cols = int(np.sum(tf.common_freq() <= 50))
-    assert data.shape == (5, n_cols)
+    n_freq = int(np.sum(tf.common_freq() <= 50))
+    assert data.shape == (n_freq, 5)  # rows: frequency, columns: tests
+    np.testing.assert_allclose(data[:, 2], np.abs(tf.curve(3)[1])[:n_freq])
+    coords = mesh.get_coordinates()  # (n_freq + 1, n_tests + 1, 2)
+    x_edges = coords[0, :, 0]
+    # Cells centred on the true numbers; skipped number 4 gives wider cells
+    np.testing.assert_allclose(x_edges, [0.5, 1.5, 2.5, 4.0, 5.5, 6.5])
+    y_edges = coords[:, 0, 1]
+    assert np.all(np.diff(y_edges) > 0)  # frequency increases upward
+    f = tf.common_freq()[:n_freq]
+    np.testing.assert_allclose((y_edges[:-1] + y_edges[1:]) / 2, f)
+    assert ax.get_xlabel() == "Test number"
+    assert ax.get_ylabel() == "Frequency [Hz]"
     assert mesh.colorbar is not None
     assert mesh.colorbar.ax.get_ylabel() == "|Out/In| [g/g]"
-    assert ax.get_ylabel() == "Test number"
-    # Rows are labelled with real test numbers (4 is skipped, no empty row)
-    fig.canvas.draw()
-    labels = [t.get_text() for t in ax.get_yticklabels() if t.get_text()]
-    assert set(labels) <= {"1", "2", "3", "5", "6"}
-    assert "5" in labels or "6" in labels
     plt.close("all")
     ax = tf.plot(kind="heatmap", colorbar=False)
     assert ax.collections[0].colorbar is None
     plt.close("all")
 
 
-def test_heatmap_missing_test_row_is_masked():
+def test_heatmap_single_test():
+    camp = Campaign.from_tests([resonant_test("a", 20.0, 1)], numbers=[7])
+    ax = camp.spectrum("Out", nperseg=256).plot(kind="heatmap")
+    x_edges = ax.collections[0].get_coordinates()[0, :, 0]
+    np.testing.assert_allclose(x_edges, [6.5, 7.5])
+    plt.close("all")
+
+
+def test_heatmap_with_peak_frequency_on_top(camp):
+    tf = camp.transfer_function("In", "Out", nperseg=1024)
+    ax = tf.plot(kind="heatmap", fmax=40)
+    fp = tf.peak_frequency(fmin=5, fmax=40)
+    ax2 = fp.plot(ax=ax, color="w", ylabel="Frequency [Hz]")
+    assert ax2 is ax
+    line = ax.lines[0]
+    # Same x-axis: points sit on the centres of the heatmap columns
+    np.testing.assert_array_equal(line.get_xdata(), [1, 2, 3, 5, 6])
+    np.testing.assert_allclose(line.get_ydata(), fp.values)
+    x_edges = ax.collections[0].get_coordinates()[0, :, 0]
+    centres = (x_edges[:-1] + x_edges[1:]) / 2
+    np.testing.assert_allclose(centres[[0, 1, 4]], [1, 2, 6])
+    lo, hi = ax.get_xlim()
+    assert lo <= 0.5 and hi >= 6.5
+    plt.close("all")
+
+
+def test_heatmap_cmap_and_norm():
+    from matplotlib.colors import LogNorm, Normalize
+
+    tests = [resonant_test(f"t{i}", 20.0 - i, i) for i in range(1, 4)]
+    psd = Campaign.from_tests(tests).spectrum("Out", nperseg=256)
+    ax = psd.plot(kind="heatmap", cmap="magma", norm=LogNorm())
+    mesh = ax.collections[0]
+    assert mesh.cmap.name == "magma"
+    assert isinstance(mesh.norm, LogNorm)
+    plt.close("all")
+    ax = psd.plot(kind="heatmap", norm=Normalize(vmin=0, vmax=1))
+    assert ax.collections[0].norm.vmax == 1
+    plt.close("all")
+    with pytest.raises(TypeError, match="heatmap"):
+        psd.plot(cmap="magma")  # overlay
+    with pytest.raises(TypeError, match="curve results only"):
+        Campaign.from_tests(tests).metric("Out", "max").plot(norm=LogNorm())
+    with pytest.raises(ValueError, match="No frequencies"):
+        psd.plot(kind="heatmap", fmin=500)
+
+
+def test_heatmap_missing_test_is_blank_column():
     tests = [
         resonant_test("a", 20.0, 1),
         resonant_test("b", 18, 2, channels=("In",)),
@@ -298,8 +350,38 @@ def test_heatmap_missing_test_row_is_masked():
         psd = Campaign.from_tests(tests).spectrum("Out", nperseg=256)
     ax = psd.plot(kind="heatmap")
     data = ax.collections[0].get_array()
-    assert data.mask[1].all() and not data.mask[0].any()
+    assert data.mask[:, 1].all() and not data.mask[:, 0].any()
     plt.close("all")
+
+
+def test_units_come_from_channels():
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=4096)
+    b, a = iirpeak(10.0, Q=5.0, fs=FS)
+
+    def test(name, force_units="kN", disp_units="mm"):
+        return Test(
+            name=name,
+            channels=[
+                Channel(data=x, dt=1 / FS, name_user="D1", units=disp_units),
+                Channel(
+                    data=lfilter(b, a, x), dt=1 / FS, name_user="F1", units=force_units
+                ),
+                Channel(data=x, dt=1 / FS, name_user="N"),  # no units
+            ],
+        )
+
+    camp = Campaign.from_tests([test("a"), test("b")])
+    assert camp.transfer_function("D1", "F1", nperseg=256).units == "kN/mm"
+    assert camp.spectrum("D1", nperseg=256).units == "mm²/Hz"
+    assert camp.spectrum("F1", method="fourier").units == "kN"
+    assert camp.metric("F1", "max").units == "kN"
+    # A channel without units gives no units, or a reciprocal
+    assert camp.spectrum("N", nperseg=256).units is None
+    assert camp.transfer_function("D1", "N", nperseg=256).units == "1/mm"
+    assert camp.transfer_function("N", "F1", nperseg=256).units == "kN"
+    k = camp.metric("F1", "max") / camp.metric("D1", "max")
+    assert k.units == "kN/mm"
 
 
 def test_plot_option_errors(camp):

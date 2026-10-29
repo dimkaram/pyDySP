@@ -10,7 +10,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import FuncFormatter, MaxNLocator
+from matplotlib.ticker import MaxNLocator
 from tabulate import tabulate
 
 # Ways to turn complex curve values into real numbers for plots and CSV.
@@ -567,6 +567,8 @@ class CampaignResult:
         part: str | None = None,
         legend: bool = True,
         colorbar: bool = True,
+        cmap: Any = None,
+        norm: Any = None,
         **plot_kwargs: Any,
     ) -> plt.Axes:
         """
@@ -579,8 +581,14 @@ class CampaignResult:
 
         **Curve results** are plotted as an overlay (default, one line per
         test labelled ``"Test <number>"``) or as a heatmap
-        (``kind="heatmap"``: frequency along x, one horizontal stripe per
-        test, colour showing amplitude).
+        (``kind="heatmap"``, like a spectrogram: test number along the
+        horizontal axis, increasing to the right, frequency along the
+        vertical axis, increasing upward, colour showing amplitude). Each
+        heatmap column is centred on its true test number and extends to the
+        midpoints between neighbouring numbers, so a skipped number gives a
+        wider column, as in the scalar plots. Because both use test number as
+        x, a scalar result such as :meth:`peak_frequency` can be drawn on top
+        of the heatmap with ``ax=``. Missing tests are blank columns.
 
         No figure size, font or colour scheme is set, so the user's
         Matplotlib style applies. Like the other single-axes plot methods in
@@ -620,10 +628,16 @@ class CampaignResult:
             Overlay only. Add a legend with the test labels (default ``True``).
         colorbar : bool, optional
             Heatmap only. Add a colour bar next to ``ax`` (default ``True``).
+        cmap : str or matplotlib.colors.Colormap, optional
+            Heatmap only. Colour map, for example ``"magma"``. Default: the
+            Matplotlib style's colour map.
+        norm : matplotlib.colors.Normalize, optional
+            Heatmap only. Colour scaling, for example
+            ``matplotlib.colors.LogNorm()`` for a logarithmic colour scale,
+            or ``Normalize(vmin=0, vmax=5)`` for fixed limits.
         **plot_kwargs
             Passed to :meth:`matplotlib.axes.Axes.plot` (scalar and overlay)
-            or :meth:`matplotlib.axes.Axes.pcolormesh` (heatmap, for
-            example ``norm=matplotlib.colors.LogNorm()``). For scalar
+            or :meth:`matplotlib.axes.Axes.pcolormesh` (heatmap). For scalar
             results the default marker is ``"o"``.
 
         Returns
@@ -650,18 +664,32 @@ class CampaignResult:
                     "x=, highlight=, origin= and label= apply to scalar results only."
                 )
             kind = "overlay" if kind is None else kind
+            if kind == "heatmap":
+                if cmap is not None:
+                    plot_kwargs["cmap"] = cmap
+                if norm is not None:
+                    plot_kwargs["norm"] = norm
+                return self._plot_heatmap(
+                    ax, fmin, fmax, part, xlabel, ylabel, colorbar, plot_kwargs
+                )
+            if cmap is not None or norm is not None:
+                raise TypeError("cmap= and norm= apply to kind='heatmap' only.")
             if kind == "overlay":
                 return self._plot_overlay(
                     ax, fmin, fmax, part, xlabel, ylabel, legend, plot_kwargs
                 )
-            if kind == "heatmap":
-                return self._plot_heatmap(
-                    ax, fmin, fmax, part, xlabel, ylabel, colorbar, plot_kwargs
-                )
             raise ValueError(f"kind must be 'overlay' or 'heatmap', got {kind!r}.")
-        if kind is not None or fmin is not None or fmax is not None or part:
+        if (
+            kind is not None
+            or fmin is not None
+            or fmax is not None
+            or part
+            or cmap is not None
+            or norm is not None
+        ):
             raise TypeError(
-                "kind=, fmin=, fmax= and part= apply to curve results only."
+                "kind=, fmin=, fmax=, part=, cmap= and norm= apply to curve "
+                "results only."
             )
         return self._plot_scalar(
             x, ax, highlight, origin, xlabel, ylabel, label, plot_kwargs
@@ -791,32 +819,29 @@ class CampaignResult:
         colorbar: bool,
         plot_kwargs: dict[str, Any],
     ) -> plt.Axes:
-        """Curve plot: frequency along x, one stripe per test along y."""
+        """Curve plot: test number along x, frequency along y (spectrogram-like)."""
         freq = self.common_freq()
         data = self.to_array()
         is_complex = np.iscomplexobj(data)
         data = np.asarray(self._real_part(data, part), dtype=float)
         mask = _band(freq, fmin, fmax)
-        rows = np.arange(len(self.numbers))
+        if not mask.any():
+            raise ValueError(f"No frequencies between {fmin} and {fmax} Hz.")
+        # Columns centred on the true test numbers, edges at the midpoints
+        x_edges = _cell_edges(np.asarray(self.numbers, dtype=float))
+        y_edges = _cell_edges(freq[mask])
         if ax is None:
             _, ax = plt.subplots()
-        plot_kwargs.setdefault("shading", "nearest")
         mesh = ax.pcolormesh(
-            freq[mask], rows, np.ma.masked_invalid(data[:, mask]), **plot_kwargs
+            x_edges,
+            y_edges,
+            np.ma.masked_invalid(data[:, mask].T),
+            shading="flat",
+            **plot_kwargs,
         )
-        # One equal stripe per test, labelled with its real test number
-        numbers = list(self.numbers)
-
-        def tick(value: float, _pos: int) -> str:
-            i = round(value)
-            if abs(value - i) > 1e-9 or not 0 <= i < len(numbers):
-                return ""
-            return str(numbers[i])
-
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.yaxis.set_major_formatter(FuncFormatter(tick))
-        ax.set_xlabel("Frequency [Hz]" if xlabel is None else xlabel)
-        ax.set_ylabel("Test number" if ylabel is None else ylabel)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.set_xlabel("Test number" if xlabel is None else xlabel)
+        ax.set_ylabel("Frequency [Hz]" if ylabel is None else ylabel)
         if colorbar:
             ax.figure.colorbar(mesh, ax=ax, label=self._curve_ylabel(part, is_complex))
         return ax
@@ -867,6 +892,16 @@ def _combine_units(a: str | None, b: str | None, symbol: str) -> str | None:
     if symbol == "/" and b:
         return f"1/{b}"
     return a or b
+
+
+def _cell_edges(centres: np.ndarray) -> np.ndarray:
+    """Cell edges at the midpoints between centres; outer cells mirror their neighbour."""
+    if len(centres) == 1:
+        return np.array([centres[0] - 0.5, centres[0] + 0.5])
+    mid = (centres[:-1] + centres[1:]) / 2.0
+    first = centres[0] - (mid[0] - centres[0])
+    last = centres[-1] + (centres[-1] - mid[-1])
+    return np.concatenate([[first], mid, [last]])
 
 
 def _band(f: np.ndarray, fmin: float | None, fmax: float | None) -> np.ndarray:

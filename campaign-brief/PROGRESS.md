@@ -72,66 +72,19 @@ date and the decision.
 | 2026-10-29 | 2 | Combining results | Same tests in the same order. `+`/`-` require identical units, else `ValueError`. `*`/`/` combine units into a compound string. |
 | 2026-10-29 | all | Plot return values (**overrides the brief and design-results.md**) | New code: a method that draws on one set of axes returns that `ax`; a method that builds a multi-panel figure returns `(fig, ax)`. The figure is `ax.figure`. `CampaignResult.plot()` returns `ax`. Stage 3 overlay and heatmap follow the same rule. Existing methods are not changed. |
 | 2026-10-29 | 2 | `response_spectrum` default-periods aliasing | Not fixed on this branch; listed under "Found but not fixed" for a separate issue. |
+| 2026-10-29 | all | The 11 `noqa` comments from `59ab231` | Reviewed and accepted as they are. |
+| 2026-10-29 | 3 | Stage 3 `1cf18af` and Claude Code's six choices: one class for scalars and curves; complex values shown as magnitude by default with `part=`; heatmap with a colour bar; `tests=[...]` raises `KeyError` for an unknown number; units derived from the channels; linear overlay with legend | Approved. |
+| 2026-10-29 | 3 | Units of curve and scalar results | Always derived from the channels' own units (`"g/g"`, `"kN/mm"`, `"g²/Hz"`), never hard-coded. A test with non-g units locks this in. |
+| 2026-10-29 | 3 | Heatmap colour scaling | Users can pass `cmap=` and `norm=` (for example `LogNorm()` for a log scale); documented. |
+| 2026-10-29 | 3 | Heatmap orientation (**overrides design-results.md and the earlier docstring**) | Like a spectrogram: test number along x, increasing to the right; frequency along y, increasing upward. Each column is centred on its true test number and extends to the midpoints between neighbouring numbers, so a skipped number gives a wider column. A scalar result such as `peak_frequency` can be drawn on top with `ax=`. Missing tests are blank columns. The colour bar stays. |
+| 2026-10-29 | 4, 5 | `docs/source/examples.rst` (**overrides delivery.md and the earlier decision**) | Moves from Stage 4 to Stage 5, because the new notebook does not exist yet and its links would be broken. |
 
 ## Open questions for the author
 
 List anything waiting for an answer. Remove it once answered, and move the answer
 to Decisions.
 
-- **Ruff findings left with `noqa` (housekeeping commit `59ab231`), for you to
-  decide.** Each has a reason in the code:
-  - `src/pydysp/__init__.py`: RUF022, `__all__` not sorted. It is grouped by
-    category with comments; sorting would lose that.
-  - `src/pydysp/channel.py` (`response_spectrum`, `plot_response_spectrum`):
-    B008, `periods=np.linspace(0.05, 5.0, 100)` default. Changing it to
-    `None` alters the public signature. Note: `response_spectrum` stores this
-    shared default array as `ResponseSpectrum.T` without copying, so a user who
-    edits `spec.T` in place changes the default for later calls (see "Found
-    but not fixed").
-  - `src/pydysp/test.py`: UP007 on `ChannelKey` and `ChannelSelector`, and UP035
-    on the `typing` import that carries `Sequence`. Using `|` or
-    `collections.abc.Sequence` would change the runtime value of these public
-    aliases.
-  - `src/pydysp/test.py`: BLE001 (`except Exception`) in four MAT-header parse
-    helpers in `from_sofsi_mat` and `from_equals_mat`. Header values are
-    arbitrary MAT objects, so narrowing the exceptions could make loading fail
-    on files that load today.
-  - `src/pydysp/test.py`: BLE001 in `channel_health`, which deliberately reports
-    any per-channel failure as a table row.
-
-- **Stage 3 choices made without an explicit ruling (please confirm):**
-  - **One class for both kinds.** `CampaignResult` now holds either one number
-    per test (scalar) or one curve per test (curve: `freq` set, `values` a list
-    of 1D arrays, `None` for a missing test). Each test keeps its own frequency
-    array, so overlays work even when grids differ; only the heatmap,
-    `to_array()` and `to_csv()` need one shared grid (`common_freq()` raises a
-    clear `ValueError` otherwise, never interpolates). `is_curve` tells them
-    apart.
-  - Operations that make no sense for curves raise `TypeError`: `value()`
-    (use `curve(number)`), `cumsum()`, `to_table()`, and arithmetic between two
-    curve results. Curves support `abs()`, negation and arithmetic with numbers.
-  - Transfer functions keep the complex `H(f)`. Plots and CSV show the
-    magnitude by default; `part="real"|"imag"|"phase"` (degrees) is available
-    for both.
-  - `tests=[...]` raises `KeyError` for a number not in the campaign (an
-    explicit list, unlike `select(numbers=range(...))`, which ignores gaps).
-  - Overlay: linear axes, one line per test labelled `"Test <n>"`, legend on by
-    default (`legend=False` to turn it off). `fmin`/`fmax` limit the drawn band.
-  - Heatmap: frequency along x, one equal-height stripe per test along y in
-    campaign order, tick labels are the real test numbers (skipped numbers get no
-    empty row). Missing tests are masked (blank stripe). Colour bar on by
-    default (`colorbar=False`); extra keyword arguments go to `pcolormesh`
-    (for example `norm=LogNorm()`).
-  - `peak_frequency(fmin, fmax)` uses the magnitude, searches the inclusive band,
-    returns a scalar result in Hz labelled `"Peak frequency <label>"`, NaN for a
-    missing curve, and raises `ValueError` if a curve has no points in the band.
-  - Units: transfer function `"<y units>/<x units>"` (for example `"g/g"`);
-    Welch PSD `"<units>²/Hz"`; Fourier amplitude `"<units>"`.
-  - `spectrum(method="fourier")` takes no extra arguments (`Channel.fourier`
-    has none). Fourier grids depend on test length, so the docstring points to
-    Welch with a fixed `nperseg` for heatmaps.
-  - Shared missing-channel lookup (`_find_channels`) now serves `metric`,
-    `transfer_function` and `spectrum`; the `metric` warning text is unchanged.
+- None at present.
 
 ## Found but not fixed
 
@@ -268,6 +221,13 @@ transfer_function, spectrum, overlay, heatmap (Stage 3)").
 - Look first at: the one-class design (Open questions), the heatmap's y-axis
   (stripes in campaign order labelled with real numbers), and complex values
   shown as magnitude by default.
+- Approved 2026-10-29, with changes applied in a fix-up commit ("Stage 3
+  fix-up: ..."): heatmap reoriented (test number along x at the true numbers,
+  frequency along y; `peak_frequency` can be drawn on top), explicit `cmap=`
+  and `norm=`; tests for cell edges, a single test, the overlay with
+  `peak_frequency`, `cmap`/`norm`, blank columns, and units from non-g
+  channels (147 tests in total). Units were already taken from the channels;
+  the new test locks that in.
 
 ## Next step
 
