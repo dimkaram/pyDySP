@@ -55,6 +55,6 @@ napoleon_use_rtype = True
 # Theme for HTML pages
 html_theme = "sphinx_rtd_theme"
 
-# Paths that contain custom static files (such as style sheets)
-# They are copied after the builtin static files
-html_static_path = ["_static"]
+# Paths that contain custom static files (such as style sheets).
+# None are used; add "_static" here (and create the folder) if needed.
+html_static_path = []

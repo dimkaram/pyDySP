@@ -35,6 +35,7 @@ class AriasResult:
     The ``AriasResult`` class is typically created by higher-level routines
     that compute Arias intensity from acceleration time series. It is mainly
     used to:
+
     * Visualise the cumulative Arias intensity (Husid plot).
     * Provide a convenient representation of the significant-duration window
       for trimming and further analysis.
