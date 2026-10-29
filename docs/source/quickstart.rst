@@ -55,6 +55,26 @@ processing, plotting, spectra, transfer functions, and more:
     # Compute transfer function H1
     f, H = test.transfer_function("Acc1", "Acc2", kind="H1")
 
+Saving a ``Test`` to CSV and reloading it
+-----------------------------------------
+
+``Test.to_csv`` writes the data in wide format with one header per column,
+the channel's axis label (for example ``Acc1 [g]``). ``Test.from_csv`` uses
+each header as the channel name, so the data file alone does not restore
+channel names and units. Save the channel metadata in a channel-info CSV as
+well, and apply it after loading:
+
+.. code-block:: python
+
+    test.to_csv("data.csv")
+    test.channel_info_to_csv("channel_info.csv")
+
+    test2 = Test.from_csv("data.csv").with_channel_info_from_csv("channel_info.csv")
+    test2["Acc1"]          # names and units are back
+
+The same pattern works as a ``Campaign`` loader:
+``loader=lambda f: Test.from_csv(f).with_channel_info_from_csv("channel_info.csv")``.
+
 Working with a ``Campaign`` (many tests)
 ----------------------------------------
 

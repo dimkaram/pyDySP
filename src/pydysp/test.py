@@ -955,6 +955,21 @@ class Test:
         ------
         ValueError
             If the header is missing or the required time column is not present.
+
+        Notes
+        -----
+        Each column header becomes the channel name. A file written by
+        :meth:`to_csv` has axis labels such as ``"Acc1 [g]"`` (or ``"Ch1"``)
+        as headers, so channel names and units are not restored from the
+        data file alone. Keep the channel metadata in a channel-info CSV and
+        apply it after loading::
+
+            test.to_csv("data.csv")
+            test.channel_info_to_csv("channel_info.csv")
+
+            test2 = Test.from_csv("data.csv").with_channel_info_from_csv(
+                "channel_info.csv"
+            )
         """
         with open(filename, newline="") as f:
             reader = csv.reader(f)
@@ -1038,6 +1053,15 @@ class Test:
         ValueError
             If no channels are selected or if selected channels do not share
             the same time vector.
+
+        Notes
+        -----
+        The data file holds one header per column (the axis label, for
+        example ``"Acc1 [g]"``, or ``"Ch1"``), so channel names, units and
+        other metadata are not preserved by it alone: :meth:`from_csv`
+        uses the header as the channel name. Save the metadata with
+        :meth:`channel_info_to_csv` and restore it with
+        :meth:`with_channel_info_from_csv` after :meth:`from_csv`.
         """
         # Check overwrite
         if os.path.exists(filename) and not overwrite:

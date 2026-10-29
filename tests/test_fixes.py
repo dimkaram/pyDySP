@@ -51,3 +51,34 @@ def test_test_info_channel_table_columns_match_headers():
     assert columns["name_user"] == "Acc1"
     assert columns["name_input"] == "DAQ_07"
     assert columns["units"] == "g"
+
+
+# ----------------------------------------------------------------------
+# Test.to_csv / from_csv: names come back via the channel-info CSV
+# ----------------------------------------------------------------------
+
+
+def test_csv_round_trip_restores_names_with_channel_info(tmp_path):
+    from pydysp.test import Test
+
+    t = np.arange(100) * 0.01
+    test = Test(
+        name="T",
+        channels=[
+            Channel(data=np.sin(t), dt=0.01, name_user="Acc1", units="g"),
+            Channel(data=np.cos(t), dt=0.01, name_user="L1", units="mm"),
+        ],
+    )
+    data, info = str(tmp_path / "data.csv"), str(tmp_path / "channel_info.csv")
+    test.to_csv(data)
+    test.channel_info_to_csv(info)
+
+    # The data file alone keeps the axis labels as names (documented)
+    plain = Test.from_csv(data)
+    assert [ch.name_user for ch in plain.channels] == ["Acc1 [g]", "L1 [mm]"]
+
+    # The documented pattern restores names and units
+    restored = Test.from_csv(data).with_channel_info_from_csv(info)
+    assert restored["Acc1"].units == "g"
+    assert restored["L1"].units == "mm"
+    np.testing.assert_allclose(restored["L1"].data, test["L1"].data)
