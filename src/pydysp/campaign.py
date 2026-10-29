@@ -247,6 +247,13 @@ class Campaign:
         The table lists number, name, description, tags, duration and
         channel count for every test.
 
+        The duration is that of the first channel after trimming, taken from
+        its time axis and trim window only, so no channel data are processed
+        (drift correction, filtering and the like are not run). If the
+        channels of a test do not all have the same duration, the test shows
+        ``nan`` and a note below the table names it. A test whose trim window
+        is invalid shows ``-``.
+
         Parameters
         ----------
         tablefmt : str, optional
@@ -265,11 +272,15 @@ class Campaign:
             for k, v in self.meta.items():
                 lines.append(f"  {k}: {v}")
         rows = []
+        mixed: list[int] = []
         for num, t in zip(self.numbers, self.tests):
-            try:
-                dur = f"{t.duration:.6g}"
-            except ValueError:
+            duration = _test_duration(t)
+            if duration is None:
                 dur = "-"
+            else:
+                dur = f"{duration:.6g}"
+                if np.isnan(duration):
+                    mixed.append(num)
             rows.append(
                 [
                     num,
@@ -297,6 +308,11 @@ class Campaign:
                 stralign="left",
             )
         )
+        if mixed:
+            lines.append(
+                "\nnan: the channels of test(s) "
+                f"{', '.join(map(str, mixed))} do not all have the same duration."
+            )
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ #
@@ -1605,6 +1621,47 @@ def _column_parser(filled: Sequence[str]) -> Callable[[str], Any]:
     if all(_INT_RE.fullmatch(v) for v in filled):
         return int
     return float
+
+
+def _channel_duration(ch: Channel) -> float | None:
+    """
+    Duration of a channel after trimming, from its time axis only.
+
+    Mirrors the trimming step of :meth:`Channel.processed` without
+    processing the data (only trimming changes the time axis). Returns
+    ``None`` if the trim window is invalid.
+    """
+    t = ch.time
+    if t is None or len(t) == 0:
+        return 0.0
+    if ch.trim_params:
+        t_start = ch.trim_params.get("t_start", float(t[0]))
+        t_end = ch.trim_params.get("t_end", float(t[-1]))
+        if t_end <= t_start:
+            return None
+        t = t[(t >= t_start) & (t <= t_end)]
+        if len(t) == 0:
+            return None
+    return float(t[-1] - t[0])
+
+
+def _test_duration(test: Test) -> float | None:
+    """
+    Duration of a test for :meth:`Campaign.info`, without processing data.
+
+    The first channel's trimmed duration; NaN if the channels do not all
+    have the same duration (same tolerance as :attr:`Test.duration`);
+    ``None`` if a trim window is invalid.
+    """
+    if not test.channels:
+        return 0.0
+    durations = [_channel_duration(ch) for ch in test.channels]
+    if any(d is None for d in durations):
+        return None
+    first = durations[0]
+    if not all(np.isclose(d, first, rtol=1e-6, atol=1e-12) for d in durations[1:]):
+        return float("nan")
+    return first
 
 
 def _channel_label(ch: Channel | None, key: str) -> str:

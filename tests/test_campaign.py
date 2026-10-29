@@ -1,6 +1,7 @@
 import csv
 import os
 import warnings
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -617,3 +618,73 @@ def test_no_warnings_for_normal_use(tmp_path):
         camp.select(numbers=[1, 2])
         camp.info()
         camp.check_channels()
+
+
+# ----------------------------------------------------------------------
+# info(): durations without processing channel data
+# ----------------------------------------------------------------------
+
+
+def info_durations(camp: Campaign) -> list[str]:
+    """Duration column of camp.info(), one string per test."""
+    lines = [ln for ln in camp.info().splitlines() if ln.startswith("|")]
+    header = [c.strip() for c in lines[0].strip("|").split("|")]
+    col = header.index("duration [s]")
+    return [ln.strip("|").split("|")[col].strip() for ln in lines[2:]]
+
+
+def processing_test(name: str = "P") -> Test:
+    """Test whose channels have drift correction and filtering set."""
+    return (
+        make_test(name, channels=("A1", "A2", "A3")).drift_corrected().filtered(fc=10.0)
+    )
+
+
+def test_info_does_not_process_channel_data(monkeypatch):
+    camp = Campaign.from_tests(
+        [processing_test("a"), processing_test("b").trimmed(t_start=0.5, t_end=1.5)]
+    )
+    calls = []
+    original = Channel.processed
+
+    def spy(self, *args, **kwargs):
+        calls.append(self.name_user)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Channel, "processed", spy)
+    camp.info()
+    assert calls == []
+    # Test.duration, by contrast, processes every channel
+    assert camp[0].duration > 0
+    assert sorted(calls) == ["A1", "A2", "A3"]
+
+
+def test_info_duration_unchanged_for_normal_and_trimmed_tests():
+    normal = processing_test("normal")
+    trimmed = processing_test("trimmed").trimmed(t_start=0.5, t_end=1.25)
+    camp = Campaign.from_tests([normal, trimmed])
+    assert info_durations(camp) == [f"{normal.duration:.6g}", f"{trimmed.duration:.6g}"]
+    assert info_durations(camp) == ["1.99", "0.75"]
+    assert "nan" not in camp.info()
+
+
+def test_info_mixed_trims_give_nan_and_note():
+    t = processing_test("mixed")
+    mixed = t.trimmed(selector="A2", t_start=0.5, t_end=1.0)
+    with pytest.raises(ValueError):
+        _ = mixed.duration  # Test.duration refuses
+    camp = Campaign.from_tests([t, mixed], numbers=[3, 7])
+    info = camp.info()  # does not raise
+    assert info_durations(camp) == ["1.99", "nan"]
+    assert "nan: the channels of test(s) 7 do not all have the same duration." in info
+
+
+def test_info_invalid_trim_and_empty_test():
+    bad = make_test("bad", channels=("A1",))
+    bad = Test(
+        name="bad",
+        channels=[replace(bad[0], trim_params={"t_start": 50.0, "t_end": 60.0})],
+    )
+    empty = Test(name="empty")
+    camp = Campaign.from_tests([bad, empty])
+    assert info_durations(camp) == ["-", "0"]
