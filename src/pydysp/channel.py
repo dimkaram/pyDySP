@@ -1,15 +1,15 @@
 # channel.py
 from dataclasses import dataclass, field, replace
-from typing import Optional, Dict, Any
+from typing import Any, ClassVar
 
-import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import detrend, butter, filtfilt, welch
+import numpy as np
 from scipy.integrate import cumulative_trapezoid
+from scipy.signal import butter, detrend, filtfilt, welch
 
-from .spectra import FourierSpectrum, WelchSpectrum
 from .arias import AriasResult
 from .response import ResponseSpectrum, sdof_newmark_response
+from .spectra import FourierSpectrum, WelchSpectrum
 
 
 @dataclass(eq=False)
@@ -84,46 +84,50 @@ class Channel:
     """
 
     # Default processing parameters
-    DRIFT_DEFAULTS = {"points": 50}
-    FILTER_DEFAULTS = {"btype": "lowpass", "fc": 50.0, "order": 2}
-    BASELINE_DEFAULTS = {"type": "linear"}
+    DRIFT_DEFAULTS: ClassVar[dict[str, Any]] = {"points": 50}
+    FILTER_DEFAULTS: ClassVar[dict[str, Any]] = {
+        "btype": "lowpass",
+        "fc": 50.0,
+        "order": 2,
+    }
+    BASELINE_DEFAULTS: ClassVar[dict[str, Any]] = {"type": "linear"}
 
     # Time-history data and time axis
     data: np.ndarray
-    dt: Optional[float] = None
+    dt: float | None = None
     t0: float = 0.0
-    time: Optional[np.ndarray] = None
+    time: np.ndarray | None = None
 
     # Naming, labels and physical metadata
-    name_input: Optional[str] = None
-    name_user: Optional[str] = None
-    label_axis: Optional[str] = None
-    label_legend: Optional[str] = None
-    description_long: Optional[str] = None
-    quantity: Optional[str] = None
-    units: Optional[str] = None
-    raw_units: Optional[str] = None
+    name_input: str | None = None
+    name_user: str | None = None
+    label_axis: str | None = None
+    label_legend: str | None = None
+    description_long: str | None = None
+    quantity: str | None = None
+    units: str | None = None
+    raw_units: str | None = None
     calibration_factor: float = 1.0
 
     # Processing configuration and notes
-    drift_params: Dict[str, Any] = field(default_factory=dict)
-    filter_params: Dict[str, Any] = field(default_factory=dict)
-    baseline_params: Dict[str, Any] = field(default_factory=dict)
-    trim_params: Dict[str, Any] = field(default_factory=dict)
+    drift_params: dict[str, Any] = field(default_factory=dict)
+    filter_params: dict[str, Any] = field(default_factory=dict)
+    baseline_params: dict[str, Any] = field(default_factory=dict)
+    trim_params: dict[str, Any] = field(default_factory=dict)
     processing_notes: list[str] = field(default_factory=list)
 
     # Grouping and free-form metadata
     tags: set[str] = field(default_factory=set)
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     # Internal cache for processed data (not part of the public API)
-    _cache_processed_time: Optional[np.ndarray] = field(
+    _cache_processed_time: np.ndarray | None = field(
         default=None, init=False, repr=False, compare=False
     )
-    _cache_processed_data: Optional[np.ndarray] = field(
+    _cache_processed_data: np.ndarray | None = field(
         default=None, init=False, repr=False, compare=False
     )
-    _cache_signature: Optional[tuple] = field(
+    _cache_signature: tuple | None = field(
         default=None, init=False, repr=False, compare=False
     )
 
@@ -1216,7 +1220,8 @@ class Channel:
 
     def response_spectrum(
         self,
-        periods: np.ndarray = np.linspace(0.05, 5.0, 100),
+        # Public default; changing it would alter the signature.
+        periods: np.ndarray = np.linspace(0.05, 5.0, 100),  # noqa: B008
         g: float = 9.81,
         ksi: float = 0.05,
         processed: bool = True,
@@ -1289,7 +1294,7 @@ class Channel:
 
     def plot(
         self,
-        ax: Optional[plt.Axes] = None,
+        ax: plt.Axes | None = None,
         processed: bool = True,
         use_cache: bool = True,
         include_label: bool = True,
@@ -1416,10 +1421,10 @@ class Channel:
 
     def plot_fourier(
         self,
-        ax: Optional[plt.Axes] = None,
+        ax: plt.Axes | None = None,
         processed: bool = True,
         use_cache: bool = True,
-        fmax: Optional[float] = 50.0,
+        fmax: float | None = 50.0,
         **plot_kwargs: Any,
     ) -> plt.Axes:
         """
@@ -1452,10 +1457,10 @@ class Channel:
 
     def plot_psd(
         self,
-        ax: Optional[plt.Axes] = None,
+        ax: plt.Axes | None = None,
         processed: bool = True,
         use_cache: bool = True,
-        fmax: Optional[float] = 50.0,
+        fmax: float | None = 50.0,
         **welch_kwargs: Any,
     ) -> plt.Axes:
         """
@@ -1488,7 +1493,7 @@ class Channel:
 
     def plot_arias(
         self,
-        ax: Optional[plt.Axes] = None,
+        ax: plt.Axes | None = None,
         g: float = 9.81,
         processed: bool = True,
         use_cache: bool = True,
@@ -1532,8 +1537,9 @@ class Channel:
 
     def plot_response_spectrum(
         self,
-        ax: Optional[plt.Axes] = None,
-        periods: np.ndarray = np.linspace(0.05, 5.0, 100),
+        ax: plt.Axes | None = None,
+        # Public default; changing it would alter the signature.
+        periods: np.ndarray = np.linspace(0.05, 5.0, 100),  # noqa: B008
         ksi: float = 0.05,
         processed: bool = True,
         use_cache: bool = True,

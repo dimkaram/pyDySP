@@ -1,6 +1,7 @@
 # downsample.py
-import scipy.io as sio
 import warnings
+
+import scipy.io as sio
 
 
 def downsample(file_in: str, file_out: str, factor: int = 20) -> None:

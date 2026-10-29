@@ -1,7 +1,8 @@
 # helpers.py
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Mapping
+from collections.abc import Mapping
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 
@@ -19,8 +20,8 @@ def annotate_peak(
     peak: Literal["abs", "max", "min"] = "abs",
     processed: bool = True,
     use_cache: bool = True,
-    fmt: Optional[str] = None,
-    welch_kwargs: Optional[Mapping[str, Any]] = None,
+    fmt: str | None = None,
+    welch_kwargs: Mapping[str, Any] | None = None,
     **annotate_kwargs: Any,
 ) -> None:
     """
@@ -136,7 +137,7 @@ def _annotate_time_peak(
     peak: Literal["abs", "max", "min"] = "abs",
     processed: bool = True,
     use_cache: bool = True,
-    fmt: Optional[str] = None,
+    fmt: str | None = None,
     **annotate_kwargs: Any,
 ) -> None:
     """
@@ -207,7 +208,7 @@ def _annotate_fourier_peak(
     *,
     processed: bool = True,
     use_cache: bool = True,
-    fmt: Optional[str] = None,
+    fmt: str | None = None,
     **annotate_kwargs: Any,
 ) -> None:
     """
@@ -265,8 +266,8 @@ def _annotate_psd_peak(
     *,
     processed: bool = True,
     use_cache: bool = True,
-    fmt: Optional[str] = None,
-    welch_kwargs: Optional[Mapping[str, Any]] = None,
+    fmt: str | None = None,
+    welch_kwargs: Mapping[str, Any] | None = None,
     **annotate_kwargs: Any,
 ) -> None:
     """
@@ -332,7 +333,7 @@ def annotate_time_peak(
     peak: Literal["abs", "max", "min"] = "abs",
     processed: bool = True,
     use_cache: bool = True,
-    fmt: Optional[str] = None,
+    fmt: str | None = None,
     **annotate_kwargs: Any,
 ) -> None:
     """
@@ -376,7 +377,7 @@ def annotate_fourier_peak(
     *,
     processed: bool = True,
     use_cache: bool = True,
-    fmt: Optional[str] = None,
+    fmt: str | None = None,
     **annotate_kwargs: Any,
 ) -> None:
     """
@@ -416,8 +417,8 @@ def annotate_psd_peak(
     *,
     processed: bool = True,
     use_cache: bool = True,
-    fmt: Optional[str] = None,
-    welch_kwargs: Optional[Mapping[str, Any]] = None,
+    fmt: str | None = None,
+    welch_kwargs: Mapping[str, Any] | None = None,
     **annotate_kwargs: Any,
 ) -> None:
     """

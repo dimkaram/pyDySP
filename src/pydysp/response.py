@@ -1,9 +1,9 @@
 # response.py
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 @dataclass
@@ -60,7 +60,7 @@ class ResponseSpectrum:
 
     def plot(
         self,
-        ax: Optional[plt.Axes] = None,
+        ax: plt.Axes | None = None,
         y: str = "Sa",
         logx: bool = False,
         logy: bool = False,

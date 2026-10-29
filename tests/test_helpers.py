@@ -1,15 +1,15 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from pydysp.channel import Channel
-from pydysp.response import ResponseSpectrum
 from pydysp.helpers import (
-    annotate_peak,
-    annotate_time_peak,
     annotate_fourier_peak,
+    annotate_peak,
     annotate_psd_peak,
     annotate_response_peak,
+    annotate_time_peak,
 )
+from pydysp.response import ResponseSpectrum
 
 # ----------------------------------------------------------------------
 # Fixtures / helpers

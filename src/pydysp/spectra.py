@@ -1,9 +1,9 @@
 # spectra.py
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 @dataclass
@@ -50,8 +50,8 @@ class FourierSpectrum:
 
     def plot(
         self,
-        ax: Optional[plt.Axes] = None,
-        fmax: Optional[float] = 50.0,
+        ax: plt.Axes | None = None,
+        fmax: float | None = 50.0,
         **plot_kwargs: Any,
     ) -> plt.Axes:
         """
@@ -127,8 +127,8 @@ class WelchSpectrum:
 
     def plot(
         self,
-        ax: Optional[plt.Axes] = None,
-        fmax: Optional[float] = 50.0,
+        ax: plt.Axes | None = None,
+        fmax: float | None = 50.0,
         **plot_kwargs: Any,
     ) -> plt.Axes:
         """

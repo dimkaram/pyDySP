@@ -1,9 +1,9 @@
 # arias.py
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 @dataclass
@@ -47,7 +47,7 @@ class AriasResult:
 
     def plot(
         self,
-        ax: Optional[plt.Axes] = None,
+        ax: plt.Axes | None = None,
         show_window: bool = True,
         **plot_kwargs: Any,
     ) -> plt.Axes:

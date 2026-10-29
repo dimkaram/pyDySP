@@ -1,5 +1,5 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pytest
 
 from pydysp.channel import Channel
@@ -129,7 +129,7 @@ def test_trim_by_threshold():
 def test_trim_by_fraction_of_peak():
     ch = make_sine_channel()
     ch_trim = ch.trim_by_fraction_of_peak(fraction=0.5)
-    t_trim, y_trim = ch_trim.processed(use_cache=False)
+    _t_trim, y_trim = ch_trim.processed(use_cache=False)
 
     # At least some samples should be above ~0.5 of peak
     assert np.max(np.abs(y_trim)) >= 0.5 * np.max(np.abs(ch.data))
@@ -142,8 +142,8 @@ def test_trim_by_fraction_of_peak():
 
 def test_max_min_rms_simple_sine():
     ch = make_sine_channel(f0=2.0, fs=100.0, duration=1.0, amplitude=2.0)
-    t_max, y_max = ch.max_value()
-    t_min, y_min = ch.min_value()
+    _t_max, y_max = ch.max_value()
+    _t_min, y_min = ch.min_value()
     rms = ch.rms()
 
     assert y_max == pytest.approx(2.0, rel=0.05)

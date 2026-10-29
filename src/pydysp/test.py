@@ -1,31 +1,30 @@
 # test.py
 from __future__ import annotations
 
+import csv
+import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
-from typing import (
+
+# typing.Sequence kept: it is part of the public ChannelSelector alias below.
+from typing import (  # noqa: UP035
     Any,
-    Dict,
-    Iterable,
-    List,
     Literal,
-    Mapping,
-    Optional,
     Sequence,
     Union,
 )
 
-import csv
-import os
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-import matplotlib.pyplot as plt
 from tabulate import tabulate
 
 from .channel import Channel
 
 # Type aliases for channel selection / referencing
-ChannelKey = Union[int, str, Channel]
-ChannelSelector = Union[ChannelKey, Sequence[ChannelKey], slice, None]
+# Public aliases kept as typing.Union: "|" would change their runtime type.
+ChannelKey = Union[int, str, Channel]  # noqa: UP007
+ChannelSelector = Union[ChannelKey, Sequence[ChannelKey], slice, None]  # noqa: UP007
 
 
 @dataclass
@@ -63,18 +62,18 @@ class Test:
     # Name of the experiment (e.g. 'Shaking table Test 07').
     name: str
     # Longer description.
-    description: Optional[str] = None
+    description: str | None = None
     # Path or identifier of the primary raw data file from which this Test was built.
-    source_file: Optional[str] = None
+    source_file: str | None = None
     # String representation of the test time/date
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
     # Ordered list of Channel objects belonging to this experiment.
-    channels: List[Channel] = field(default_factory=list)
+    channels: list[Channel] = field(default_factory=list)
     # Free-form tags for grouping and filtering tests.
     tags: set[str] = field(default_factory=set)
     # Free-form metadata dictionary.
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------ #
     # Initialisation
@@ -170,7 +169,7 @@ class Test:
     def iter_channels(
         self,
         selector: ChannelSelector = None,
-        tags: Optional[Iterable[str]] = None,
+        tags: Iterable[str] | None = None,
         require_all_tags: bool = False,
     ) -> Iterable[Channel]:
         """
@@ -223,7 +222,7 @@ class Test:
         elif isinstance(selector, slice):
             base = self.channels[selector]
         elif isinstance(selector, Sequence):
-            tmp: List[Channel] = []
+            tmp: list[Channel] = []
             for key in selector:
                 if isinstance(key, Channel):
                     if key not in self.channels:
@@ -286,7 +285,7 @@ class Test:
     # ------------------------------------------------------------------ #
 
     @property
-    def channel(self) -> "Test":
+    def channel(self) -> Test:
         """
         Convenience view over this test's channels.
 
@@ -527,12 +526,12 @@ class Test:
         cls,
         name: str,
         channels: Sequence[Channel],
-        description: Optional[str] = None,
-        source_file: Optional[str] = None,
-        timestamp: Optional[str] = None,
-        tags: Optional[Iterable[str]] = None,
-        meta: Optional[Mapping[str, Any]] = None,
-    ) -> "Test":
+        description: str | None = None,
+        source_file: str | None = None,
+        timestamp: str | None = None,
+        tags: Iterable[str] | None = None,
+        meta: Mapping[str, Any] | None = None,
+    ) -> Test:
         """
         Construct a test directly from an existing sequence of channels.
 
@@ -583,11 +582,11 @@ class Test:
     def from_sofsi_mat(
         cls,
         filename: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        tags: Optional[Iterable[str]] = None,
-        meta: Optional[Mapping[str, Any]] = None,
-    ) -> "Test":
+        name: str | None = None,
+        description: str | None = None,
+        tags: Iterable[str] | None = None,
+        meta: Mapping[str, Any] | None = None,
+    ) -> Test:
         """
         Construct a test from a SoFSI-style MATLAB ``.mat`` file.
 
@@ -648,13 +647,13 @@ class Test:
         def _parse_int(val):
             try:
                 return int(val)
-            except Exception:
+            except Exception:  # noqa: BLE001 - header values are arbitrary MAT objects
                 return None
 
         def _parse_float(val):
             try:
                 return float(val)
-            except Exception:
+            except Exception:  # noqa: BLE001 - header values are arbitrary MAT objects
                 return None
 
         def _get_attr(obj, field: str):
@@ -695,11 +694,11 @@ class Test:
         n_samples = len(time_vec)
         # 3. Data channels: Channel_i_Data (i >= 2)
         data_channels_indices: list[int] = []
-        for key in imported_data.keys():
+        for key in imported_data:
             if key.startswith("Channel_") and key.endswith("_Data"):
                 try:
                     idx = int(key.split("_")[1])
-                except Exception:
+                except ValueError:
                     continue
                 if idx >= 2:
                     data_channels_indices.append(idx)
@@ -774,11 +773,11 @@ class Test:
     def from_equals_mat(
         cls,
         filename: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        tags: Optional[Iterable[str]] = None,
-        meta: Optional[Mapping[str, Any]] = None,
-    ) -> "Test":
+        name: str | None = None,
+        description: str | None = None,
+        tags: Iterable[str] | None = None,
+        meta: Mapping[str, Any] | None = None,
+    ) -> Test:
         """
         Construct a test from an EQUALS-style MATLAB ``.mat`` file.
 
@@ -836,13 +835,13 @@ class Test:
         def _parse_int(val):
             try:
                 return int(val)
-            except Exception:
+            except Exception:  # noqa: BLE001 - header values are arbitrary MAT objects
                 return None
 
         def _parse_float(val):
             try:
                 return float(val)
-            except Exception:
+            except Exception:  # noqa: BLE001 - header values are arbitrary MAT objects
                 return None
 
         # 1. Header metadata
@@ -895,7 +894,7 @@ class Test:
             name = os.path.splitext(base)[0]
         testdate = header_dict["Testdate"]
         timestr = header_dict["Time"]
-        timestamp: Optional[str] = None
+        timestamp: str | None = None
         if isinstance(testdate, str) and isinstance(timestr, str):
             timestamp = f"{testdate} {timestr}"
         elif isinstance(testdate, str):
@@ -918,11 +917,11 @@ class Test:
     def from_csv(
         cls,
         filename: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        tags: Optional[Iterable[str]] = None,
-        meta: Optional[Mapping[str, Any]] = None,
-    ) -> "Test":
+        name: str | None = None,
+        description: str | None = None,
+        tags: Iterable[str] | None = None,
+        meta: Mapping[str, Any] | None = None,
+    ) -> Test:
         """
         Construct a test from a CSV file in wide format.
 
@@ -1196,7 +1195,7 @@ class Test:
                                 row.append(value)
                 writer.writerow(row)
 
-    def with_channel_info_from_csv(self, filename: str) -> "Test":
+    def with_channel_info_from_csv(self, filename: str) -> Test:
         """
         Return a new test with channel metadata updated from CSV.
 
@@ -1385,9 +1384,9 @@ class Test:
                 # If either name_user or name_input was provided and no explicit
                 # label_axis was supplied in the CSV, set None so Channel.__post_init__
                 # can create sensible defaults (name_user preferred, else name_input).
-                if name_key_provided and not has_label_axis_col:
-                    updates["label_axis"] = None
-                elif name_key_provided and has_label_axis_col and la_val == "":
+                if (name_key_provided and not has_label_axis_col) or (
+                    name_key_provided and has_label_axis_col and la_val == ""
+                ):
                     updates["label_axis"] = None
 
             # label_legend
@@ -1395,9 +1394,9 @@ class Test:
             if ll_val:
                 updates["label_legend"] = ll_val
             else:
-                if name_key_provided and not has_label_legend_col:
-                    updates["label_legend"] = None
-                elif name_key_provided and has_label_legend_col and ll_val == "":
+                if (name_key_provided and not has_label_legend_col) or (
+                    name_key_provided and has_label_legend_col and ll_val == ""
+                ):
                     updates["label_legend"] = None
 
             if tags_val is not None:
@@ -1420,7 +1419,7 @@ class Test:
     # Channel management
     # ------------------------------------------------------------------ #
 
-    def add_channel(self, ch: Channel) -> "Test":
+    def add_channel(self, ch: Channel) -> Test:
         """
         Return a new test with a channel appended to the channel list.
 
@@ -1455,7 +1454,7 @@ class Test:
             meta=dict(self.meta),
         )
 
-    def drop_channels(self, selector: ChannelSelector) -> "Test":
+    def drop_channels(self, selector: ChannelSelector) -> Test:
         """
         Return a new test with the selected channels removed.
 
@@ -1505,7 +1504,7 @@ class Test:
         self,
         selector: ChannelSelector = None,
         **override: Any,
-    ) -> "Test":
+    ) -> Test:
         """
         Return a new test with drift-corrected versions of selected channels.
 
@@ -1557,7 +1556,7 @@ class Test:
         self,
         selector: ChannelSelector = None,
         **override: Any,
-    ) -> "Test":
+    ) -> Test:
         """
         Return a new test with filtered versions of selected channels.
 
@@ -1609,7 +1608,7 @@ class Test:
         self,
         selector: ChannelSelector = None,
         **override: Any,
-    ) -> "Test":
+    ) -> Test:
         """
         Return a new test with baseline-corrected selected channels.
 
@@ -1661,7 +1660,7 @@ class Test:
         self,
         selector: ChannelSelector = None,
         **override: Any,
-    ) -> "Test":
+    ) -> Test:
         """
         Return a new test with manually trimmed selected channels.
 
@@ -1713,14 +1712,14 @@ class Test:
     def trimmed_by_threshold(
         self,
         selector: ChannelSelector = None,
-        ref: Optional[ChannelKey] = None,
+        ref: ChannelKey | None = None,
         threshold: float = 0.01,
         use_abs: bool = True,
         buffer_before: float = 0.0,
         buffer_after: float = 0.0,
         processed: bool = True,
         use_cache: bool = True,
-    ) -> "Test":
+    ) -> Test:
         """
         Return a new test with threshold-based aligned trimming.
 
@@ -1835,14 +1834,14 @@ class Test:
     def trimmed_by_fraction_of_peak(
         self,
         selector: ChannelSelector = None,
-        ref: Optional[ChannelKey] = None,
+        ref: ChannelKey | None = None,
         fraction: float = 0.05,
         use_abs: bool = True,
         buffer_before: float = 0.0,
         buffer_after: float = 0.0,
         processed: bool = True,
         use_cache: bool = True,
-    ) -> "Test":
+    ) -> Test:
         """
         Return a new test with fraction-of-peak aligned trimming.
 
@@ -1954,7 +1953,7 @@ class Test:
     def trimmed_by_arias(
         self,
         selector: ChannelSelector = None,
-        ref: Optional[ChannelKey] = None,
+        ref: ChannelKey | None = None,
         lower: float = 0.05,
         upper: float = 0.95,
         g: float = 9.81,
@@ -1962,7 +1961,7 @@ class Test:
         buffer_after: float = 0.0,
         processed: bool = True,
         use_cache: bool = True,
-    ) -> "Test":
+    ) -> Test:
         """
         Return a new test with Arias-intensity-based aligned trimming.
 
@@ -2268,10 +2267,10 @@ class Test:
         processed: bool = True,
         use_cache: bool = True,
         phase: bool = False,
-        fmax: Optional[float] = None,
-        ax: Optional[plt.Axes] = None,
-        tf_kwargs: Optional[Mapping[str, Any]] = None,
-        label: Optional[str] = None,
+        fmax: float | None = None,
+        ax: plt.Axes | None = None,
+        tf_kwargs: Mapping[str, Any] | None = None,
+        label: str | None = None,
         **plot_kwargs: Any,
     ) -> plt.Axes:
         """
@@ -3001,7 +3000,7 @@ class Test:
             name = ch.name_user or ch.name_input or f"ch{idx}"
             try:
                 t, y = ch.xy(processed=processed, use_cache=use_cache)
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001 - report any failure in the table
                 rows.append(
                     [idx, name] + ["-"] * (len(headers) - 3) + [f"error: {err}"]
                 )
