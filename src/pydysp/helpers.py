@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from .channel import Channel
 from .response import ResponseSpectrum
 
-
 PlotType = Literal["time", "timehistory", "fourier", "psd", "welch"]
 
 

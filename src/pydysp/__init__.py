@@ -14,7 +14,6 @@ from .helpers import (
     annotate_response_peak,
 )
 
-
 __all__ = [
     # Main classes
     "Channel",

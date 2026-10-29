@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from pydysp.channel import Channel
 from pydysp.test import Test
 
-
 # ----------------------------------------------------------------------
 # Fixtures / helpers
 # ----------------------------------------------------------------------
