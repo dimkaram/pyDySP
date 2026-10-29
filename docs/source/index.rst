@@ -44,4 +44,5 @@ If you are new to pyDySP, the recommended reading order is:
 
    installation
    quickstart
+   examples
    pydysp

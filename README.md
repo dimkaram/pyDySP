@@ -8,6 +8,7 @@ Dynamic Signal Processing for Experimental Data
 ![Maintenance](https://img.shields.io/maintenance/active/2025)
 ![License](https://img.shields.io/github/license/dkaramitros/pyDySP)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/dkaramitros/pyDySP/HEAD?labpath=examples%2Fdemo.ipynb)
+[![Binder: Campaign demo](https://img.shields.io/badge/Binder-campaign%20demo-579aca)](https://mybinder.org/v2/gh/dkaramitros/pyDySP/HEAD?labpath=examples%2Fcampaign_demo.ipynb)
 
 **pyDySP** is a lightweight Python library for **dynamic signal processing** of experimental data, developed for  
 *the EQUALS and SoFSI Laboratories* at the *University of Bristol*.
@@ -244,11 +245,15 @@ Plot methods return the Matplotlib `Axes` they drew on (the figure is `ax.figure
 
 ## Example Notebooks
 
-Located in:
+Located in `examples/`. Both use simulated data and run on Binder without installing anything.
 
-```
-examples/
-```
+- **[demo.ipynb](examples/demo.ipynb)** ([Binder](https://mybinder.org/v2/gh/dkaramitros/pyDySP/HEAD?labpath=examples%2Fdemo.ipynb)):
+  a compact tour of `Channel` and `Test`: processing, plotting with peak annotations, Arias trimming,
+  batch processing, transfer functions, time delays, channel health and the CSV round trip.
+- **[campaign_demo.ipynb](examples/campaign_demo.ipynb)** ([Binder](https://mybinder.org/v2/gh/dkaramitros/pyDySP/HEAD?labpath=examples%2Fcampaign_demo.ipynb)):
+  a simulated shaking-table campaign of 20 tests with `Campaign`: loading a folder, selection by tag
+  and number, per-test metrics, transfer-function overlays and heatmaps that follow a drifting
+  resonance, the test-info CSV and channel checks.
 
 ## Documentation
 

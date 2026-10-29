@@ -31,7 +31,7 @@ Keep entries short and factual. Do not delete earlier entries.
 - [x] Stage 2: Scalar results and plotting (`design-results.md`)
 - [x] Stage 3: Curve results (`design-results.md`)
 - [x] Stage 4: Documentation (`delivery.md`)
-- [ ] Stage 5: Notebooks (`delivery.md`)
+- [x] Stage 5: Notebooks (`delivery.md`)
 - [ ] Stage 6: Release preparation (`delivery.md`)
 
 Mark a stage done only when its tests pass, `ruff` and `black` are clean, and it
@@ -78,13 +78,33 @@ date and the decision.
 | 2026-10-29 | 3 | Heatmap colour scaling | Users can pass `cmap=` and `norm=` (for example `LogNorm()` for a log scale); documented. |
 | 2026-10-29 | 3 | Heatmap orientation (**overrides design-results.md and the earlier docstring**) | Like a spectrogram: test number along x, increasing to the right; frequency along y, increasing upward. Each column is centred on its true test number and extends to the midpoints between neighbouring numbers, so a skipped number gives a wider column. A scalar result such as `peak_frequency` can be drawn on top with `ax=`. Missing tests are blank columns. The colour bar stays. |
 | 2026-10-29 | 4, 5 | `docs/source/examples.rst` (**overrides delivery.md and the earlier decision**) | Moves from Stage 4 to Stage 5, because the new notebook does not exist yet and its links would be broken. |
+| 2026-10-29 | 3, 4 | Stage 3 fix-up `d578b8a` and Stage 4 `7a4ecf2` | Approved. The `Test.to_csv`/`from_csv` channel-name finding stays under "Found but not fixed". |
+| 2026-10-29 | 5 | Simulated campaign files | CSV files in a temporary folder plus one channel-info CSV (`Test.channel_info_to_csv`), loaded with `loader=lambda f: Test.from_csv(f).with_channel_info_from_csv(info_csv)`. Restores names and units, mirrors `demo.ipynb`, shows the loader chain. `Test.to_csv`/`from_csv` unchanged; a markdown cell explains why. |
+| 2026-10-29 | 5 | Notebook links | Point to the original repository `dkaramitros/pyDySP`, with the README's Binder URL pattern (`labpath=examples%2Fcampaign_demo.ipynb`). They resolve only after the merge; expected. |
+| 2026-10-29 | 5 | `docs/source/examples.rst` | In the toctree, links both notebooks on GitHub and Binder with one paragraph each. No notebook extension, no new docs dependency. |
+| 2026-10-29 | 5 | README notebooks | Binder link for the new notebook next to the existing one; both described in "Example Notebooks". |
+| 2026-10-29 | 5 | Notebook style and execution | Shared skeleton from delivery.md; `demo.ipynb` light touch only; moderate figure sizes. nbconvert/ipykernel installed in the session only. Both executed top to bottom from a clean checkout with only the normal dependencies, outputs saved, no errors or warnings, no files left behind. |
+| 2026-10-29 | 5, 6 | Printed version in the notebooks | Stays 0.2.2 during Stage 5. In Stage 6, after the 0.3.0 bump, re-execute both notebooks so the printed version and outputs are current. |
 
 ## Open questions for the author
 
 List anything waiting for an answer. Remove it once answered, and move the answer
 to Decisions.
 
-- None at present.
+- **`demo.ipynb` rewrites tracked files in `data/`.** Its last cell (unchanged,
+  light touch) saves to `../data/demo_data.csv` and
+  `../data/demo_channel_info.csv`, which are committed files. Re-executing it
+  from a clean checkout modifies both: the committed copies have CRLF line
+  endings, and the data values differ by up to 0.008 (out of a range of
+  about 10), probably from older library versions or a Windows run. No new files
+  are created. In this commit the `data/` files are left as they were (the
+  executed notebook's printed output does not show the values, so it does not
+  disagree with them). Options: (a) leave as is; (b) commit the regenerated
+  files; (c) change that cell to write to a temporary folder, as the new
+  notebook does, and delete `data/demo_*.csv` (a content change beyond the light
+  touch). Recommendation: (c) in Stage 6 or a follow-up, because it makes
+  "leave no files behind" true for both notebooks and avoids noisy diffs on
+  every re-run; (a) is fine if you prefer to keep the demo exactly as it is.
 
 ## Found but not fixed
 
@@ -105,6 +125,12 @@ scope here; the author will raise separate issues.
   checking the Stage 4 doc snippets; Campaign code is not affected. (Possible
   fix: write `name_user` as the header and units in a second row or a sidecar
   file.)
+
+- `Test.info()`: the channel table's `name_user` and `name_input` columns are
+  swapped. The header lists `name_user, name_input`, but each row writes
+  `ch.name_input` then `ch.name_user` (`src/pydysp/test.py`, around lines
+  483 and 496). Found while building the campaign notebook, which therefore
+  does not print `Test.info()`.
 
 ## Plot-method audit (2026-10-29)
 
@@ -267,14 +293,54 @@ CampaignResult (Stage 4)").
 - Look first at: the quickstart Campaign section (wording and length), the
   Conventions block in `campaign.rst`, and the README snippet.
 
+### Stage 5
+
+Done 2026-10-29. Commit: see `git log` (message "Add campaign demo notebook
+and examples page (Stage 5)").
+
+- Added `examples/campaign_demo.ipynb` (25 cells, about 250 KB with outputs):
+  intro and imports with version; simulated campaign of 20 tests (hammer,
+  white noise, records; natural frequency drops from 8 Hz to about 5 Hz;
+  residual LVDT displacement after records; test 12 missing) written as CSV
+  files plus a channel-info CSV in a `tempfile.TemporaryDirectory`;
+  `from_folder` with the loader chain, `number_from`, descriptions, tags and
+  meta; selection with index against number; `metric` (`max_abs` with
+  `.abs()`, `highlight=`, response against input, amplification table);
+  residual and accumulated displacement; transfer-function overlay, heatmap with
+  `peak_frequency` on top, and the `peak_frequency` table; test-info CSV round
+  trip; `check_channels` and `missing_channels` with one channel removed, and
+  the NaN gap (warning caught and printed); temporary folder cleaned up; "Next
+  steps".
+- Changed `examples/demo.ipynb` (light touch): intro links the campaign
+  notebook; one-line comments added to the two code cells that lacked one;
+  `layout="constrained"` on the one plain `plt.subplots` call; closing "Next
+  steps" section; kernel metadata "Python 3 (ipykernel)", Python 3.11.
+  Content and order unchanged. Re-executed; outputs are about 20% larger
+  (same figure sizes; likely a newer Matplotlib or a different default font).
+- Added `docs/source/examples.rst` (toctree in `index.rst`): one paragraph and
+  GitHub and Binder links per notebook.
+- Changed `README.md`: Binder badge for the campaign notebook next to the
+  existing one; "Example Notebooks" describes both with links.
+- Execution: both notebooks were executed with `jupyter nbconvert --execute` in
+  a clean copy of the repository, with pyDySP installed non-editable from that
+  copy and only numpy, scipy, matplotlib, tabulate, nbconvert and ipykernel in a
+  Python 3.11 environment. 0 errors, 0 stderr outputs, every code cell executed.
+  The copy was a git snapshot: afterwards only the two notebooks and the
+  tracked `data/demo_*.csv` files (see Open questions) were modified, and no new
+  files were left. The repository's `data/` files are unchanged in this commit.
+- Whole repo: `ruff` (including notebooks) and `black` clean; 147 tests pass;
+  Sphinx 0 warnings.
+- Look first at: the campaign notebook's figures and wording, the `data/`
+  question under Open questions, and the README badge.
+
 ## Next step
 
 State exactly what the next session should do first.
 
-Wait for the author's review of Stage 4. Then read `delivery.md` (notebooks)
-and start Stage 5: the new `examples/campaign_demo.ipynb` (simulated data,
-temporary folder, outline in delivery.md, heatmap in the spectrogram
-orientation with `peak_frequency` on top), the light touch on `demo.ipynb`,
-`docs/source/examples.rst` in the toctree linking both notebooks on GitHub and
-Binder (no notebook extension), and a Binder link for each notebook in the
-README.
+Wait for the author's review of Stage 5 and the `data/` question. Then read
+`delivery.md` (release preparation) and start Stage 6, as separate commits:
+Python 3.11 minimum (`requires-python`, classifiers, tool settings, docs);
+the CI matrix 3.11, 3.12, 3.13; the separate commit adding `ruff check` and
+`black --check` to `tests.yml`; the 0.3.0 bump in `pyproject.toml` and
+`__init__.py`; re-execute both notebooks so the printed version is 0.3.0; then
+`python -m build`, `twine check` and the Sphinx build. Never tag or upload.
