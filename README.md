@@ -18,6 +18,8 @@ It provides:
   (processing, spectra, trimming, Arias, response spectra, plots, metadata).
 - A **Test** class for multi-channel experiments  
   (selection, batch processing, cross-spectra, transfer functions, modal analysis via *sdypy*, plotting utilities, `.mat`/`.csv` I/O).
+- A **Campaign** class for a whole series of tests  
+  (folder loading, selection by number/tag/metadata, per-test metrics, transfer-function overlays and heatmaps across tests, test-info CSV, sensor-change checks).
 - Clean, readable, notebook-friendly code for research, teaching and reproducible workflows.
 - Full internal documentation and example notebooks.
 
@@ -41,9 +43,11 @@ It provides:
     - [Transfer functions](#transfer-functions)
     - [Channel health](#channel-health)
     - [Modal identification (optional)](#modal-identification-optional)
+    - [Campaigns](#campaigns)
   - [Features](#features)
     - [Channel](#channel)
     - [Test](#test)
+    - [Campaign](#campaign)
   - [Example Notebooks](#example-notebooks)
   - [Documentation](#documentation)
   - [Contributing](#contributing)
@@ -185,6 +189,31 @@ model.select_poles()
 model.print_modal_data()
 ```
 
+### Campaigns
+
+```python
+from pydysp import Campaign, Test
+
+camp = Campaign.from_folder(
+    "data/shallow_foundation",              # *.mat, natural sort order
+    loader=Test.from_sofsi_mat,
+    number_from="SH2601_{number}_*",        # test numbers from file names
+)
+tests = camp.select(exclude_tags={"hammer"})
+
+a_max = tests.metric("A1", "max_abs")       # signed, like Channel.max_abs()
+ax = a_max.plot(highlight=21)               # value against test number
+
+tf = tests.transfer_function("A8", "A14", nperseg=1024)
+ax = tf.plot(kind="heatmap", fmax=40)       # test number vs frequency
+tf.peak_frequency(fmin=5, fmax=40).plot(ax=ax, color="w")
+
+camp.test_info_to_csv("tests.csv")          # edit, then reload with
+camp = camp.with_test_info_from_csv("tests.csv")
+```
+
+Plot methods return the Matplotlib `Axes` they drew on (the figure is `ax.figure`).
+
 ## Features
 
 ### Channel
@@ -205,6 +234,13 @@ model.print_modal_data()
 - `.mat` (SoFSI/EQUALS) and `.csv` I/O  
 - Grid plots & channel summary tables  
 - Health diagnostics  
+
+### Campaign
+- Load a folder of tests (case-insensitive pattern, natural sort, test numbers from file names)  
+- Select by number, name, tag or metadata; numbers stay with the tests  
+- Per-test metrics (`max`, `min`, `max_abs`, `rms`, `residual`, or any function) with transforms and plots  
+- Transfer functions and spectra across tests: overlay, heatmap, peak frequency  
+- Test-info CSV (export, edit, reload) and channel checks for sensor changes  
 
 ## Example Notebooks
 

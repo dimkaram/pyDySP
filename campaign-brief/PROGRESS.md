@@ -30,7 +30,7 @@ Keep entries short and factual. Do not delete earlier entries.
 - [x] Stage 1: Core `Campaign` (`design-campaign.md`)
 - [x] Stage 2: Scalar results and plotting (`design-results.md`)
 - [x] Stage 3: Curve results (`design-results.md`)
-- [ ] Stage 4: Documentation (`delivery.md`)
+- [x] Stage 4: Documentation (`delivery.md`)
 - [ ] Stage 5: Notebooks (`delivery.md`)
 - [ ] Stage 6: Release preparation (`delivery.md`)
 
@@ -97,6 +97,14 @@ scope here; the author will raise separate issues.
   `ResponseSpectrum.T`. Editing `spec.T` in place therefore changes the default
   grid for every later call. Fix: `periods=None` and build the grid inside, or
   copy the array.
+- `Test.to_csv` / `Test.from_csv` do not round-trip channel names when a
+  channel has units. With the default `include_axis_labels=True` the column
+  header is `label_axis` (for example `"A1 [g]"`), and `from_csv` then names the
+  channel `"A1 [g]"`; with `include_axis_labels=False` the headers are
+  `Ch1, Ch2, ...`. So `test["A1"]` fails after a CSV round trip. Found while
+  checking the Stage 4 doc snippets; Campaign code is not affected. (Possible
+  fix: write `name_user` as the header and units in a second row or a sidecar
+  file.)
 
 ## Plot-method audit (2026-10-29)
 
@@ -229,13 +237,44 @@ transfer_function, spectrum, overlay, heatmap (Stage 3)").
   channels (147 tests in total). Units were already taken from the channels;
   the new test locks that in.
 
+### Stage 4
+
+Done 2026-10-29. Commit: see `git log` (message "Document Campaign and
+CampaignResult (Stage 4)").
+
+- Added `docs/source/campaign.rst`: "Campaign API" page with a Conventions
+  section (signed `max_abs` like `Channel.max_abs()`, `.abs()` for magnitude;
+  `n_last` is a count of samples; plot methods return the `Axes`, figure is
+  `ax.figure`; missing channels), the test-info CSV format with an example, and
+  autodoc for `pydysp.campaign` and `pydysp.result`.
+- Changed `docs/source/pydysp.rst`: `Campaign` in the class list and `campaign`
+  in the API toctree.
+- Changed `docs/source/quickstart.rst`: new section "Working with a Campaign"
+  (load a folder, select, metric and transforms, plots with `ax=`, transfer
+  function overlay, heatmap with the spectrogram-like orientation and
+  `peak_frequency` drawn on top, `cmap`/`norm`, test-info CSV round trip with an
+  example file, sensor changes and `check_channels`).
+- Changed `docs/source/index.rst`: Features bullet; API line mentions `Campaign`.
+- Changed `README.md`: Campaign in the "It provides" list, a "Campaigns" Quick
+  Start snippet, a "Campaign" feature list, and table-of-contents entries.
+- No changelog file exists in the repo, so none was added. Version not bumped.
+- `examples.rst` deferred to Stage 5 (see Decisions).
+- Sphinx: 0 warnings (`make html`). `fail_on_warning` unchanged.
+- The quickstart and README calls were run end to end on a synthetic folder
+  (CSV files loaded with `Test.from_csv`): all ran without warnings, and the
+  CSV round trip restored names, tags and `amp`. That check found the
+  `to_csv`/`from_csv` naming issue listed under "Found but not fixed".
+- Look first at: the quickstart Campaign section (wording and length), the
+  Conventions block in `campaign.rst`, and the README snippet.
+
 ## Next step
 
 State exactly what the next session should do first.
 
-Wait for the author's review of Stage 3 and answers to the open questions. Then
-read `delivery.md` (documentation) and start Stage 4: `docs/source/campaign.rst`
-(autodoc for `Campaign` and `CampaignResult`), the "Campaigns" section in
-`quickstart.rst`, `docs/source/examples.rst` (links to both notebooks on GitHub
-and Binder, per the Decisions table), and the `index.rst` and README entries.
-State in the docs that `"max_abs"` is signed and `.abs()` gives the magnitude.
+Wait for the author's review of Stage 4. Then read `delivery.md` (notebooks)
+and start Stage 5: the new `examples/campaign_demo.ipynb` (simulated data,
+temporary folder, outline in delivery.md, heatmap in the spectrogram
+orientation with `peak_frequency` on top), the light touch on `demo.ipynb`,
+`docs/source/examples.rst` in the toctree linking both notebooks on GitHub and
+Binder (no notebook extension), and a Binder link for each notebook in the
+README.
