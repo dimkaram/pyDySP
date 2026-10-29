@@ -1054,14 +1054,18 @@ class Campaign:
         what : str or callable
             Built-in metric name:
 
-            * ``"max"``: largest value.
-            * ``"min"``: smallest value.
-            * ``"max_abs"``: value at the largest absolute amplitude, with its
-              sign, as :meth:`Channel.max_abs`. Use ``.abs()`` on the result
-              for the magnitude.
+            * ``"max"``: largest value (signed).
+            * ``"min"``: smallest value (signed).
+            * ``"max_abs"``: the value of the sample with the largest
+              magnitude, **keeping its sign**, exactly as
+              ``Channel.max_abs()[1]``: a negative peak is returned as a
+              negative number. Call ``.abs()`` on the result for the
+              magnitude.
             * ``"rms"``: root-mean-square value.
-            * ``"residual"``: mean of the last ``n_last`` samples (default
-              100), for example the residual displacement after a test.
+            * ``"residual"``: mean of the final ``n_last`` samples, including
+              the last one (signed), for example the residual displacement
+              after a test. ``n_last`` is a number of samples, not seconds;
+              default 50. Call ``.abs()`` on the result for the magnitude.
 
             Alternatively, any function that receives a :class:`Channel` and
             returns a number. Extra keyword arguments are passed to it.
@@ -1421,7 +1425,7 @@ def _metric_min(ch: Channel, processed: bool = True) -> float:
 
 
 def _metric_max_abs(ch: Channel, processed: bool = True) -> float:
-    """Value (with sign) at the largest absolute amplitude."""
+    """Signed value of the sample with the largest magnitude (as Channel.max_abs)."""
     return ch.max_abs(processed=processed)[1]
 
 
@@ -1430,8 +1434,8 @@ def _metric_rms(ch: Channel, processed: bool = True) -> float:
     return ch.rms(processed=processed)
 
 
-def _metric_residual(ch: Channel, processed: bool = True, n_last: int = 100) -> float:
-    """Mean of the last ``n_last`` samples."""
+def _metric_residual(ch: Channel, processed: bool = True, n_last: int = 50) -> float:
+    """Signed mean of the final ``n_last`` samples (a count, not seconds)."""
     if n_last < 1:
         raise ValueError(f"n_last must be at least 1, got {n_last}.")
     _, y = ch.xy(processed=processed)

@@ -68,6 +68,44 @@ def test_metric_builtins(camp):
     assert peak.values[0] == camp[0]["A1"].max_abs()[1]
 
 
+def single_channel_campaign(*arrays, name="X", units="mm"):
+    tests = [
+        Test(
+            name=f"T{i}",
+            channels=[
+                Channel(data=np.asarray(a, float), dt=0.01, name_user=name, units=units)
+            ],
+        )
+        for i, a in enumerate(arrays, start=1)
+    ]
+    return Campaign.from_tests(tests)
+
+
+def test_metric_max_abs_keeps_sign():
+    # Deliberate: "max_abs" is the signed value of the sample with the largest
+    # magnitude, exactly as Channel.max_abs()[1]. Do not change.
+    camp = single_channel_campaign([0.0, 1.0, -3.0, 2.0], [0.0, -1.0, 4.0, -2.0])
+    res = camp.metric("X", "max_abs")
+    np.testing.assert_array_equal(res.values, [-3.0, 4.0])
+    for t, v in zip(camp, res.values):
+        assert v == t["X"].max_abs()[1]
+    np.testing.assert_array_equal(res.abs().values, [3.0, 4.0])
+    # "max" and "min" are signed too
+    np.testing.assert_array_equal(camp.metric("X", "max").values, [2.0, 4.0])
+    np.testing.assert_array_equal(camp.metric("X", "min").values, [-3.0, -2.0])
+
+
+def test_metric_residual_default_window_is_50_samples():
+    ramp = np.arange(400.0)
+    camp = single_channel_campaign(ramp, -ramp)
+    res = camp.metric("X", "residual")
+    # Final 50 samples, including the last one: mean(350..399) = 374.5; signed
+    np.testing.assert_array_equal(res.values, [374.5, -374.5])
+    np.testing.assert_array_equal(
+        camp.metric("X", "residual", n_last=1).values, [399.0, -399.0]
+    )
+
+
 def test_metric_result_contents(camp):
     res = camp.metric("A1", "max")
     assert res.numbers == [29, 30, 32, 33]
@@ -183,7 +221,11 @@ def test_arithmetic_between_results():
     assert k.units == "kN/mm"
     assert (f * d).units == "kN·mm"
     assert (f + f).units == "kN"
-    assert (f - d).units is None
+    with pytest.raises(ValueError, match="different units"):
+        f - d
+    with pytest.raises(ValueError, match="different units"):
+        f + make_result([1.0, 2.0, 3.0], label="F2")  # units None vs "kN"
+    assert (make_result([1.0]) + make_result([2.0])).units is None
     other = make_result([1.0, 2.0, 3.0], numbers=[1, 2, 4])
     with pytest.raises(ValueError, match="same test numbers"):
         f + other
@@ -230,48 +272,53 @@ def test_to_table_and_csv(tmp_path):
 
 def test_plot_default_returns_fig_ax_and_labels(camp):
     res = camp.metric("A1", "max")
-    fig, ax = res.plot()
-    assert fig is ax.figure
+    ax = res.plot()
+    assert isinstance(ax, plt.Axes)
+    assert ax.figure is not None
     assert ax.get_xlabel() == "Test number"
     assert ax.get_ylabel() == "A1 [g]"
-    plt.close(fig)
+    plt.close("all")
 
 
-def test_plot_gaps_in_numbers(camp):
-    res = camp.metric("A1", "max")  # numbers 29, 30, 32, 33
-    fig, ax = res.plot()
+def test_plot_connects_across_skipped_numbers(camp):
+    # Numbers 29, 30, 32, 33: a skipped number does not break the line
+    ax = camp.metric("A1", "max").plot()
     x = ax.lines[0].get_xdata()
-    assert np.isnan(x[2])  # break between 30 and 32
-    np.testing.assert_array_equal(x[[0, 1, 3, 4]], [29, 30, 32, 33])
-    plt.close(fig)
-    fig, ax = res.plot(gaps=False)
-    assert not np.isnan(ax.lines[0].get_xdata()).any()
-    plt.close(fig)
+    np.testing.assert_array_equal(x, [29, 30, 32, 33])
+    assert not np.isnan(ax.lines[0].get_ydata()).any()
+    plt.close(ax.figure)
+    # Same after a selection that leaves only odd numbers
+    tests = [make_test(f"T{n}") for n in range(1, 8)]
+    odd = Campaign.from_tests(tests).select(numbers=[1, 3, 5, 7])
+    ax = odd.metric("A1", "max").plot()
+    np.testing.assert_array_equal(ax.lines[0].get_xdata(), [1, 3, 5, 7])
+    assert ax.lines[0].get_marker() == "o"
+    plt.close(ax.figure)
 
 
 def test_plot_into_given_axes_and_overrides(camp):
     fig, axes = plt.subplots(2, 2)
     res = camp.metric("A1", "max")
-    fig2, ax = res.plot(ax=axes[0, 1], ylabel="Peak [g]", xlabel="Test", color="k")
-    assert fig2 is fig and ax is axes[0, 1]
+    ax = res.plot(ax=axes[0, 1], ylabel="Peak [g]", xlabel="Test", color="k")
+    assert ax is axes[0, 1] and ax.figure is fig
     assert ax.get_ylabel() == "Peak [g]" and ax.get_xlabel() == "Test"
     assert ax.lines[0].get_color() == "k"
     # No styling applied to the figure
     assert tuple(fig.get_size_inches()) == tuple(plt.rcParams["figure.figsize"])
-    plt.close(fig)
+    plt.close("all")
 
 
 def test_plot_highlight(camp):
     res = camp.metric("A1", "max")
-    fig, ax = res.plot(highlight=32)
+    ax = res.plot(highlight=32)
     assert len(ax.lines) == 2
     hl = ax.lines[1]
     assert hl.get_marker() == "s"
     np.testing.assert_array_equal(hl.get_xdata(), [32])
-    plt.close(fig)
-    fig, ax = res.plot(highlight=[29, 33])
+    plt.close("all")
+    ax = res.plot(highlight=[29, 33])
     np.testing.assert_array_equal(ax.lines[1].get_xdata(), [29, 33])
-    plt.close(fig)
+    plt.close("all")
     with pytest.raises(KeyError):
         res.plot(highlight=31)
 
@@ -279,7 +326,7 @@ def test_plot_highlight(camp):
 def test_plot_against_other_result_with_origin(camp):
     f = camp.metric("A1", "max")
     d = camp.metric("L1", "residual")
-    fig, ax = f.plot(x=d, origin=True, highlight=30)
+    ax = f.plot(x=d, origin=True, highlight=30)
     x = ax.lines[0].get_xdata()
     y = ax.lines[0].get_ydata()
     assert x[0] == 0 and y[0] == 0
@@ -287,7 +334,7 @@ def test_plot_against_other_result_with_origin(camp):
     assert not np.isnan(x).any()  # no gap breaks against another result
     assert ax.get_xlabel() == "L1 [mm]"
     np.testing.assert_allclose(ax.lines[1].get_xdata(), [d.value(30)])
-    plt.close(fig)
+    plt.close("all")
     other = camp.select(numbers=[29, 30]).metric("L1", "residual")
     with pytest.raises(ValueError, match="same test numbers"):
         f.plot(x=other)
@@ -295,18 +342,18 @@ def test_plot_against_other_result_with_origin(camp):
 
 def test_plot_against_meta_key(camp):
     res = camp.metric("A1", "max")
-    fig, ax = res.plot(x="amp")
+    ax = res.plot(x="amp")
     x = ax.lines[0].get_xdata()
     np.testing.assert_allclose(x[:3], [0.06, 0.1, 0.2])
     assert np.isnan(x[3])  # test 33 has no "amp"
     assert ax.get_xlabel() == "amp"
-    plt.close(fig)
+    plt.close("all")
     with pytest.raises(TypeError):
         res.plot(x=3)
 
 
 def test_plot_nan_values_not_drawn():
     r = make_result([1.0, np.nan, 3.0])
-    fig, ax = r.plot()
+    ax = r.plot()
     assert np.isnan(ax.lines[0].get_ydata()[1])
-    plt.close(fig)
+    plt.close("all")

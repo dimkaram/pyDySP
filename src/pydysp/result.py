@@ -26,7 +26,9 @@ class CampaignResult:
 
     Results support ``abs()``, negation, :meth:`cumsum` and arithmetic with
     numbers or other results of the same tests, for example
-    ``f_max / d_max``. All operations return new objects.
+    ``f_max / d_max``. Results combined with ``+`` or ``-`` must have the
+    same units; ``*`` and ``/`` combine the units (``"kN/mm"``). All
+    operations return new objects.
 
     Parameters
     ----------
@@ -191,11 +193,16 @@ class CampaignResult:
                     f"to be combined; got {self.numbers} and {other.numbers}."
                 )
             a, b = (other, self) if reverse else (self, other)
+            if symbol in "+-" and a.units != b.units:
+                raise ValueError(
+                    f"Cannot {'add' if symbol == '+' else 'subtract'} results with "
+                    f"different units ({a.units!r} and {b.units!r})."
+                )
             with np.errstate(divide="ignore", invalid="ignore"):
                 values = op(a.values, b.values)
             label = f"{a.label or a.what} {symbol} {b.label or b.what}"
             if symbol in "+-":
-                units = a.units if a.units == b.units else None
+                units = a.units
             elif a.units and b.units:
                 units = f"{a.units}{'·' if symbol == '*' else '/'}{b.units}"
             elif symbol == "/" and b.units:
@@ -305,18 +312,21 @@ class CampaignResult:
         ax: plt.Axes | None = None,
         highlight: int | Iterable[int] | None = None,
         origin: bool = False,
-        gaps: bool = True,
         xlabel: str | None = None,
         ylabel: str | None = None,
         label: str | None = None,
         **plot_kwargs: Any,
-    ) -> tuple[plt.Figure, plt.Axes]:
+    ) -> plt.Axes:
         """
         Plot the values against test number, a metadata value or another result.
 
-        Points are joined in test order. NaN values are not drawn. No
-        figure size, font or colour is set, so the user's Matplotlib style
-        applies.
+        Points are joined in test order. The line is broken only where a
+        value is missing (NaN); skipped test numbers simply show as wider
+        spacing on the x-axis. No figure size, font or colour is set, so the
+        user's Matplotlib style applies.
+
+        Like the other single-axes plot methods in pyDySP, this draws on one
+        set of axes and returns those axes; the figure is ``ax.figure``.
 
         Parameters
         ----------
@@ -334,10 +344,6 @@ class CampaignResult:
             Test number(s) to mark with a square marker.
         origin : bool, optional
             If ``True``, start the line at ``(0, 0)``. Default ``False``.
-        gaps : bool, optional
-            If ``True`` (default) and ``x`` is the test number, the line is
-            broken where test numbers are not consecutive (for example a test
-            that was run but not recorded).
         xlabel, ylabel : str, optional
             Axis labels. By default the y label is the result's label and
             units, and the x label is ``"Test number"``, the meta key, or the
@@ -350,10 +356,9 @@ class CampaignResult:
 
         Returns
         -------
-        fig : matplotlib.figure.Figure
-            Figure containing ``ax``.
-        ax : matplotlib.axes.Axes
-            Axes with the plot.
+        matplotlib.axes.Axes
+            The axes drawn on (``ax`` if given, otherwise new axes). The
+            figure is ``ax.figure``.
 
         Raises
         ------
@@ -389,16 +394,12 @@ class CampaignResult:
                 hl_idx.append(self.numbers.index(int(num)))
 
         line_x, line_y = xv, y
-        if x is None and gaps and len(self.numbers) > 1:
-            line_x, line_y = _break_at_gaps(xv, y, self.numbers)
         if origin:
             line_x = np.concatenate([[0.0], line_x])
             line_y = np.concatenate([[0.0], line_y])
 
         if ax is None:
-            fig, ax = plt.subplots()
-        else:
-            fig = ax.figure
+            _, ax = plt.subplots()
         plot_kwargs.setdefault("marker", "o")
         (line,) = ax.plot(
             line_x, line_y, label=self.label if label is None else label, **plot_kwargs
@@ -419,22 +420,7 @@ class CampaignResult:
         ax.set_ylabel(self.axis_label if ylabel is None else ylabel)
         if x is None:
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        return fig, ax
-
-
-def _break_at_gaps(
-    x: np.ndarray, y: np.ndarray, numbers: list[int]
-) -> tuple[np.ndarray, np.ndarray]:
-    """Insert NaN between neighbours whose test numbers are not consecutive."""
-    xs: list[float] = [x[0]]
-    ys: list[float] = [y[0]]
-    for i in range(1, len(numbers)):
-        if numbers[i] != numbers[i - 1] + 1:
-            xs.append(np.nan)
-            ys.append(np.nan)
-        xs.append(x[i])
-        ys.append(y[i])
-    return np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        return ax
 
 
 def _to_float(value: Any) -> float:

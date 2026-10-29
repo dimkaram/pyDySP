@@ -64,6 +64,14 @@ date and the decision.
 | 2026-10-29 | 4, 5 | Notebooks in the docs (**overrides delivery.md**) | Sphinx does not build `demo.ipynb` today, so add no notebook extension and no new docs dependency. In Stage 4, add `docs/source/examples.rst` (in the toctree) linking both notebooks on GitHub and their Binder links. This replaces "add both notebooks to the docs toctree". |
 | 2026-10-29 | 6 | Lint in CI | When editing the CI matrix in Stage 6, also add `ruff check` and `black --check` steps to `.github/workflows/tests.yml`, as a separate commit so it can be dropped. |
 | 2026-10-29 | all | Scope of "ruff and black must pass" | Applies to the whole repo from now on. |
+| 2026-10-29 | all | Housekeeping commits `326cf83`, `59ab231`, `7d1dd05` and Stage 2 `a329bac` | Approved. |
+| 2026-10-29 | 2 | `"max_abs"` sign | Keep as implemented: signed value of the sample with the largest magnitude, exactly like `Channel.max_abs()` (the author plots the signed peak on the time history). Docs must say it is signed and that `.abs()` gives the magnitude; a test locks it in. `"max"` and `"min"` stay signed. |
+| 2026-10-29 | 2 | `"residual"` window | Default `n_last=50` samples (a count, not seconds), the final samples including the last one. Signed; users call `.abs()`. |
+| 2026-10-29 | 2 | `cumsum()` and missing values | Agreed: NaN adds nothing and stays NaN. |
+| 2026-10-29 | 2 | Line breaks in `plot()` (**overrides design-results.md**) | Break only at NaN values (missing channel or data), never at jumps in test number. A skipped number shows as wider x spacing. Markers stay (`marker="o"` default). The `gaps=` option is removed. |
+| 2026-10-29 | 2 | Combining results | Same tests in the same order. `+`/`-` require identical units, else `ValueError`. `*`/`/` combine units into a compound string. |
+| 2026-10-29 | all | Plot return values (**overrides the brief and design-results.md**) | New code: a method that draws on one set of axes returns that `ax`; a method that builds a multi-panel figure returns `(fig, ax)`. The figure is `ax.figure`. `CampaignResult.plot()` returns `ax`. Stage 3 overlay and heatmap follow the same rule. Existing methods are not changed. |
+| 2026-10-29 | 2 | `response_spectrum` default-periods aliasing | Not fixed on this branch; listed under "Found but not fixed" for a separate issue. |
 
 ## Open questions for the author
 
@@ -78,8 +86,8 @@ to Decisions.
     B008, `periods=np.linspace(0.05, 5.0, 100)` default. Changing it to
     `None` alters the public signature. Note: `response_spectrum` stores this
     shared default array as `ResponseSpectrum.T` without copying, so a user who
-    edits `spec.T` in place changes the default for later calls. A real fix
-    (`periods=None` and build the grid inside) is small; say if you want it.
+    edits `spec.T` in place changes the default for later calls (see "Found
+    but not fixed").
   - `src/pydysp/test.py`: UP007 on `ChannelKey` and `ChannelSelector`, and UP035
     on the `typing` import that carries `Sequence`. Using `|` or
     `collections.abc.Sequence` would change the runtime value of these public
@@ -90,31 +98,41 @@ to Decisions.
     on files that load today.
   - `src/pydysp/test.py`: BLE001 in `channel_health`, which deliberately reports
     any per-channel failure as a table row.
-- **Stage 2 choices made without an explicit ruling (please confirm):**
-  - `"max_abs"` returns the value **with its sign**, as `Channel.max_abs()[1]`
-    does. For a symmetric signal it is often negative. Use `.abs()` for the
-    magnitude. Alternative: make `"max_abs"` return `|value|`.
-  - The residual metric is named `"residual"`, with `n_last=100` samples by
-    default (`camp.metric("L1", "residual", n_last=500)`). Is 100 a sensible
-    default, or should `n_last` be required?
-  - Result class `CampaignResult` in new module `src/pydysp/result.py`, exported
-    as `pydysp.CampaignResult`. Results store a copy of each test's `meta`, so
-    `plot(x="amp")` works without the campaign.
-  - Built-ins take `processed=True` (passed to the `Channel` method); a custom
-    function gets the channel plus any extra keyword arguments.
-  - `.cumsum()` skips NaN: a missing test adds nothing and stays NaN, rather than
-    making every later value NaN.
-  - Arithmetic between results requires the same test numbers in the same order,
-    otherwise `ValueError`. Labels and units combine (`"F1 / L1"`, `"kN/mm"`); for
-    `+` and `-` the units are kept only if equal.
-  - `plot()` uses `marker="o"` by default (overridable), so isolated points
-    between gaps stay visible. Gaps (`gaps=True`) apply only to the test-number
-    x-axis; any jump in numbers breaks the line, including after a `select`.
-  - `highlight=` accepts one number or a list. It draws a hollow square in the
-    line's colour, 1.6 times the marker size. An unknown number raises `KeyError`.
-  - With a test-number x-axis, ticks are set to integers (`MaxNLocator`).
-  - Plots return `(fig, ax)` as the brief says. Note that
-    `Test.plot_transfer_function` actually returns only `ax`; it is unchanged.
+
+## Found but not fixed
+
+Problems in existing code found while working on this branch. They are out of
+scope here; the author will raise separate issues.
+
+- `Channel.response_spectrum` (and `plot_response_spectrum`): the default
+  `periods=np.linspace(0.05, 5.0, 100)` is created once, at import, and
+  `response_spectrum` passes it through `np.asarray` (no copy) into the returned
+  `ResponseSpectrum.T`. Editing `spec.T` in place therefore changes the default
+  grid for every later call. Fix: `periods=None` and build the grid inside, or
+  copy the array.
+
+## Plot-method audit (2026-10-29)
+
+Rule for new code: one set of axes returns `ax`; a multi-panel figure returns
+`(fig, ax)`. Checked by calling each method with and without `ax=`.
+
+| Method | `ax` given | `ax=None` | Follows rule |
+|---|---|---|---|
+| `Channel.plot` | same `Axes` | new `Axes` | yes |
+| `Channel.plot_fourier` | same `Axes` | new `Axes` | yes |
+| `Channel.plot_psd` | same `Axes` | new `Axes` | yes |
+| `Channel.plot_arias` | same `Axes` | new `Axes` | yes |
+| `Channel.plot_response_spectrum` | same `Axes` | new `Axes` | yes |
+| `FourierSpectrum.plot` | same `Axes` | new `Axes` | yes |
+| `WelchSpectrum.plot` | same `Axes` | new `Axes` | yes |
+| `AriasResult.plot` | same `Axes` | new `Axes` | yes |
+| `ResponseSpectrum.plot` | same `Axes` | new `Axes` | yes |
+| `Test.plot_transfer_function` | same `Axes` | new `Axes` | yes (with `phase=True` it adds a twin axis but returns the main one) |
+| `Test.plot_grid` | no `ax=` parameter | `(Figure, ndarray of Axes)`, plus `str` if `make_caption=True` | yes (multi-panel) |
+| `Test.plot_channels` | no `ax=` parameter | as `plot_grid` | yes (multi-panel) |
+| `CampaignResult.plot` (new) | same `Axes` | new `Axes` | yes (after Stage 2 fix-up) |
+
+No existing method breaks the rule.
 
 ## Stage log
 
@@ -183,6 +201,12 @@ CampaignResult (Stage 2)").
 - Whole repo: `ruff` and `black` clean; Sphinx 0 warnings; Python 3.13 and 3.11.
 - Look first at: the `max_abs` sign and `residual` default (Open questions),
   and the look of `highlight` in a real figure.
+- Approved 2026-10-29, with changes applied in a fix-up commit ("Stage 2
+  fix-up: ..."): `residual` default 50; lines break only at NaN (`gaps=`
+  removed); `+`/`-` require equal units; `plot()` returns `ax`; docstrings state
+  that `max_abs` is signed; new tests lock in the signed `max_abs`, the 50-sample
+  residual window, the unit check and connected lines across skipped numbers
+  (125 tests in total).
 
 ## Next step
 
