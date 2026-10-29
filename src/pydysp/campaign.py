@@ -18,10 +18,10 @@ from .result import CampaignResult, _combine_units
 from .test import Test
 
 # Loader signature: path -> Test
-Loader = Callable[[str], Test]
+_Loader = Callable[[str], Test]
 
 # Metric signature: Channel -> number
-MetricFunction = Callable[..., float]
+_MetricFunction = Callable[..., float]
 
 # Maximum length of a text ``meta`` value written by ``test_info_to_csv``.
 _MAX_TEXT_LEN = 80
@@ -336,7 +336,7 @@ class Campaign:
     def from_files(
         cls,
         files: Iterable[str | os.PathLike],
-        loader: Loader = Test.from_sofsi_mat,
+        loader: _Loader = Test.from_sofsi_mat,
         names: Sequence[str] | None = None,
         descriptions: Sequence[str | None] | None = None,
         tags: Sequence[Iterable[str] | None] | None = None,
@@ -478,7 +478,7 @@ class Campaign:
         folder: str | os.PathLike,
         pattern: str = "*.mat",
         recursive: bool = False,
-        loader: Loader = Test.from_sofsi_mat,
+        loader: _Loader = Test.from_sofsi_mat,
         number_from: str | None = None,
         name_template: str | None = None,
         names: Sequence[str] | None = None,
@@ -1035,7 +1035,7 @@ class Campaign:
     def metric(
         self,
         channel: str,
-        what: str | MetricFunction,
+        what: str | _MetricFunction,
         processed: bool = True,
         strict: bool = False,
         label: str | None = None,
@@ -1330,7 +1330,8 @@ class Campaign:
         unknown = [n for n in wanted if n not in self.numbers]
         if unknown:
             raise KeyError(
-                f"No test with number {', '.join(map(str, unknown))} in the campaign."
+                "Test number(s) not in the campaign: "
+                f"{', '.join(map(str, unknown))}."
             )
         return self._subset(i for i, n in enumerate(self.numbers) if n in wanted)
 
@@ -1658,7 +1659,7 @@ def _metric_residual(ch: Channel, processed: bool = True, n_last: int = 50) -> f
     return float(np.mean(y[-n_last:]))
 
 
-_METRICS: dict[str, MetricFunction] = {
+_METRICS: dict[str, _MetricFunction] = {
     "max": _metric_max,
     "min": _metric_min,
     "max_abs": _metric_max_abs,

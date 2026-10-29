@@ -41,6 +41,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # Autodoc configuration
 autodoc_typehints = "description"  # show type hints in the description
 autodoc_member_order = "bysource"  # keep members in source order
+autodoc_preserve_defaults = True  # show default values as written in the source
 
 # Napoleon configuration (we use NumPy-style docstrings)
 napoleon_google_docstring = False
