@@ -1272,7 +1272,8 @@ class Channel:
         if self.dt is None or self.dt <= 0:
             raise ValueError("Response spectrum requires a positive dt")
         a_mps2 = g * a  # convert g to m/s^2
-        periods = np.asarray(periods, dtype=float)
+        # Copy, so the result never shares the (default) periods array
+        periods = np.array(periods, dtype=float)
         if periods.ndim != 1:
             raise ValueError("periods must be a 1D array")
         if np.any(periods <= 0.0):
