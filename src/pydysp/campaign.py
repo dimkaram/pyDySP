@@ -14,7 +14,7 @@ import numpy as np
 from tabulate import tabulate
 
 from .channel import Channel
-from .result import CampaignResult
+from .result import CampaignResult, _combine_units
 from .test import Test
 
 # Loader signature: path -> Test
@@ -1121,22 +1121,13 @@ class Campaign:
         else:
             raise TypeError("what must be a metric name or a function.")
 
+        found, firsts = self._find_channels([channel], strict)
+        first = firsts[0]
         values = np.full(len(self.tests), np.nan)
-        missing: list[int] = []
-        first: Channel | None = None
-        for i, (num, t) in enumerate(zip(self.numbers, self.tests)):
-            try:
-                ch = t[channel]
-            except KeyError:
-                if strict:
-                    raise KeyError(
-                        f"Channel '{channel}' not found in test {num}."
-                    ) from None
-                missing.append(num)
+        for i, (num, chans) in enumerate(zip(self.numbers, found)):
+            if chans is None:
                 continue
-            if first is None:
-                first = ch
-            val = func(ch, **call_kwargs)
+            val = func(chans[0], **call_kwargs)
             try:
                 values[i] = float(val)
             except (TypeError, ValueError):
@@ -1144,16 +1135,8 @@ class Campaign:
                     f"Metric returned {type(val).__name__} for test {num}, "
                     "expected a number."
                 ) from None
-        if missing:
-            warnings.warn(
-                f"Channel '{channel}' missing in tests "
-                f"{', '.join(map(str, missing))}; values set to NaN.",
-                UserWarning,
-                stacklevel=2,
-            )
         if label is None:
-            label = (first.name_user or first.name_input) if first else None
-            label = label or str(channel)
+            label = _channel_label(first, channel)
         if units is None and first is not None:
             units = first.units
         return CampaignResult(
@@ -1165,6 +1148,230 @@ class Campaign:
             what=what_name,
             meta=[t.meta for t in self.tests],
         )
+
+    def transfer_function(
+        self,
+        x: str,
+        y: str,
+        kind: str = "H1",
+        tests: Iterable[int] | None = None,
+        processed: bool = True,
+        strict: bool = False,
+        **kwargs: Any,
+    ) -> CampaignResult:
+        """
+        Compute the transfer function between two channels in each test.
+
+        Uses :meth:`Test.transfer_function` for every test and returns one
+        complex curve per test.
+
+        Parameters
+        ----------
+        x : str
+            Input (excitation) channel name.
+        y : str
+            Output (response) channel name.
+        kind : {"H1", "H2"}, optional
+            Estimator, as in :meth:`Test.transfer_function`. Default ``"H1"``.
+        tests : iterable of int, optional
+            Test numbers to include, for a quick comparison such as
+            ``tests=[3, 29]``. Default: all tests. To work on a group of
+            tests (for example only white-noise tests), narrow the campaign
+            with :meth:`select` first.
+        processed : bool, optional
+            Use processed data (default ``True``).
+        strict : bool, optional
+            If ``True``, a test without ``x`` or ``y`` raises
+            :class:`KeyError`. By default it has no curve and a warning is
+            emitted.
+        **kwargs
+            Passed to :func:`scipy.signal.csd`, for example ``nperseg=1024``.
+            Use the same ``nperseg`` and sampling interval for all tests if
+            you want a heatmap, which needs one shared frequency grid.
+
+        Returns
+        -------
+        CampaignResult
+            Curve result with complex values ``H(f)``, labelled
+            ``"<y>/<x>"``. Plot it with ``.plot()`` (overlay) or
+            ``.plot(kind="heatmap")``, and get natural frequencies with
+            ``.peak_frequency(fmin=..., fmax=...)``.
+
+        Raises
+        ------
+        KeyError
+            If a number in ``tests`` is not in the campaign, or ``strict=True``
+            and a test lacks a channel.
+        """
+        camp = self._for_tests(tests)
+        found, (ch_x, ch_y) = camp._find_channels([x, y], strict)
+        freqs: list[np.ndarray | None] = []
+        curves: list[np.ndarray | None] = []
+        for t, chans in zip(camp.tests, found):
+            if chans is None:
+                freqs.append(None)
+                curves.append(None)
+                continue
+            f, h = t.transfer_function(
+                x=chans[0], y=chans[1], kind=kind, processed=processed, **kwargs
+            )
+            freqs.append(f)
+            curves.append(h)
+        units = None
+        if ch_x is not None and ch_y is not None and (ch_x.units or ch_y.units):
+            units = _combine_units(ch_y.units, ch_x.units, "/")
+        return CampaignResult(
+            values=curves,
+            freq=freqs,
+            numbers=list(camp.numbers),
+            names=camp.names,
+            label=f"{_channel_label(ch_y, y)}/{_channel_label(ch_x, x)}",
+            units=units,
+            what=kind.upper(),
+            meta=[t.meta for t in camp.tests],
+        )
+
+    def spectrum(
+        self,
+        channel: str,
+        method: str = "welch",
+        tests: Iterable[int] | None = None,
+        processed: bool = True,
+        strict: bool = False,
+        **kwargs: Any,
+    ) -> CampaignResult:
+        """
+        Compute the spectrum of one channel in each test.
+
+        Parameters
+        ----------
+        channel : str
+            Channel name.
+        method : {"welch", "fourier"}, optional
+            ``"welch"`` (default): power spectral density from
+            :meth:`Channel.welch_psd`. ``"fourier"``: single-sided Fourier
+            amplitude spectrum from :meth:`Channel.fourier`.
+        tests : iterable of int, optional
+            Test numbers to include. Default: all tests.
+        processed : bool, optional
+            Use processed data (default ``True``).
+        strict : bool, optional
+            If ``True``, a test without ``channel`` raises :class:`KeyError`.
+            By default it has no curve and a warning is emitted.
+        **kwargs
+            ``"welch"`` only: passed to :func:`scipy.signal.welch`, for
+            example ``nperseg=1024``.
+
+        Returns
+        -------
+        CampaignResult
+            Curve result, one spectrum per test, with the same plots and
+            :meth:`CampaignResult.peak_frequency` as transfer functions.
+
+        Notes
+        -----
+        The Fourier spectrum is zero-padded to the next power of two, so
+        tests of different lengths have different frequency grids. That is
+        fine for overlays, but a heatmap needs one shared grid: use
+        ``"welch"`` with a fixed ``nperseg``, or trim the tests to equal
+        length.
+
+        Raises
+        ------
+        ValueError
+            If ``method`` is unknown.
+        KeyError
+            If a number in ``tests`` is not in the campaign, or ``strict=True``
+            and a test lacks the channel.
+        """
+        if method not in ("welch", "fourier"):
+            raise ValueError(f"method must be 'welch' or 'fourier', got {method!r}.")
+        if method == "fourier" and kwargs:
+            raise TypeError(
+                "Extra keyword arguments are only accepted with method='welch'."
+            )
+        camp = self._for_tests(tests)
+        found, (first,) = camp._find_channels([channel], strict)
+        freqs: list[np.ndarray | None] = []
+        curves: list[np.ndarray | None] = []
+        for chans in found:
+            if chans is None:
+                freqs.append(None)
+                curves.append(None)
+            elif method == "welch":
+                spec = chans[0].welch_psd(processed=processed, **kwargs)
+                freqs.append(spec.f)
+                curves.append(spec.p)
+            else:
+                spec = chans[0].fourier(processed=processed)
+                freqs.append(spec.f)
+                curves.append(spec.s)
+        units = first.units if first is not None else None
+        if units and method == "welch":
+            units = f"{units}²/Hz"
+        return CampaignResult(
+            values=curves,
+            freq=freqs,
+            numbers=list(camp.numbers),
+            names=camp.names,
+            label=_channel_label(first, channel),
+            units=units,
+            what="psd" if method == "welch" else "fourier",
+            meta=[t.meta for t in camp.tests],
+        )
+
+    def _for_tests(self, tests: Iterable[int] | None) -> Campaign:
+        """Return the campaign restricted to test numbers; unknown ones raise."""
+        if tests is None:
+            return self
+        if isinstance(tests, (int, np.integer)):
+            tests = [tests]
+        wanted = [_as_int(x, "tests") for x in tests]
+        unknown = [n for n in wanted if n not in self.numbers]
+        if unknown:
+            raise KeyError(
+                f"No test with number {', '.join(map(str, unknown))} in the campaign."
+            )
+        return self._subset(i for i, n in enumerate(self.numbers) if n in wanted)
+
+    def _find_channels(
+        self, keys: Sequence[str], strict: bool
+    ) -> tuple[list[list[Channel] | None], list[Channel | None]]:
+        """
+        Look up channels by name in every test.
+
+        Returns, per test, the list of channels (``None`` if any is missing)
+        and, per key, the first channel found (for labels and units). Missing
+        channels raise ``KeyError`` if ``strict``; otherwise one warning per
+        channel names the tests that lack it.
+        """
+        found: list[list[Channel] | None] = []
+        firsts: list[Channel | None] = [None] * len(keys)
+        missing: dict[str, list[int]] = {}
+        for num, t in zip(self.numbers, self.tests):
+            chans: list[Channel] = []
+            for k, key in enumerate(keys):
+                try:
+                    ch = t[key]
+                except KeyError:
+                    if strict:
+                        raise KeyError(
+                            f"Channel '{key}' not found in test {num}."
+                        ) from None
+                    missing.setdefault(key, []).append(num)
+                    continue
+                chans.append(ch)
+                if firsts[k] is None:
+                    firsts[k] = ch
+            found.append(chans if len(chans) == len(keys) else None)
+        for key, nums in missing.items():
+            warnings.warn(
+                f"Channel '{key}' missing in tests "
+                f"{', '.join(map(str, nums))}; values set to NaN.",
+                UserWarning,
+                stacklevel=3,
+            )
+        return found, firsts
 
 
 # ---------------------------------------------------------------------- #
@@ -1397,6 +1604,13 @@ def _column_parser(filled: Sequence[str]) -> Callable[[str], Any]:
     if all(_INT_RE.fullmatch(v) for v in filled):
         return int
     return float
+
+
+def _channel_label(ch: Channel | None, key: str) -> str:
+    """Label for a channel: its user or input name, else the key used."""
+    if ch is not None:
+        return ch.name_user or ch.name_input or str(key)
+    return str(key)
 
 
 def _channel_keys(test: Test) -> list[str]:

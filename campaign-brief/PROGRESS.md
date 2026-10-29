@@ -29,7 +29,7 @@ Keep entries short and factual. Do not delete earlier entries.
 
 - [x] Stage 1: Core `Campaign` (`design-campaign.md`)
 - [x] Stage 2: Scalar results and plotting (`design-results.md`)
-- [ ] Stage 3: Curve results (`design-results.md`)
+- [x] Stage 3: Curve results (`design-results.md`)
 - [ ] Stage 4: Documentation (`delivery.md`)
 - [ ] Stage 5: Notebooks (`delivery.md`)
 - [ ] Stage 6: Release preparation (`delivery.md`)
@@ -98,6 +98,40 @@ to Decisions.
     on files that load today.
   - `src/pydysp/test.py`: BLE001 in `channel_health`, which deliberately reports
     any per-channel failure as a table row.
+
+- **Stage 3 choices made without an explicit ruling (please confirm):**
+  - **One class for both kinds.** `CampaignResult` now holds either one number
+    per test (scalar) or one curve per test (curve: `freq` set, `values` a list
+    of 1D arrays, `None` for a missing test). Each test keeps its own frequency
+    array, so overlays work even when grids differ; only the heatmap,
+    `to_array()` and `to_csv()` need one shared grid (`common_freq()` raises a
+    clear `ValueError` otherwise, never interpolates). `is_curve` tells them
+    apart.
+  - Operations that make no sense for curves raise `TypeError`: `value()`
+    (use `curve(number)`), `cumsum()`, `to_table()`, and arithmetic between two
+    curve results. Curves support `abs()`, negation and arithmetic with numbers.
+  - Transfer functions keep the complex `H(f)`. Plots and CSV show the
+    magnitude by default; `part="real"|"imag"|"phase"` (degrees) is available
+    for both.
+  - `tests=[...]` raises `KeyError` for a number not in the campaign (an
+    explicit list, unlike `select(numbers=range(...))`, which ignores gaps).
+  - Overlay: linear axes, one line per test labelled `"Test <n>"`, legend on by
+    default (`legend=False` to turn it off). `fmin`/`fmax` limit the drawn band.
+  - Heatmap: frequency along x, one equal-height stripe per test along y in
+    campaign order, tick labels are the real test numbers (skipped numbers get no
+    empty row). Missing tests are masked (blank stripe). Colour bar on by
+    default (`colorbar=False`); extra keyword arguments go to `pcolormesh`
+    (for example `norm=LogNorm()`).
+  - `peak_frequency(fmin, fmax)` uses the magnitude, searches the inclusive band,
+    returns a scalar result in Hz labelled `"Peak frequency <label>"`, NaN for a
+    missing curve, and raises `ValueError` if a curve has no points in the band.
+  - Units: transfer function `"<y units>/<x units>"` (for example `"g/g"`);
+    Welch PSD `"<units>²/Hz"`; Fourier amplitude `"<units>"`.
+  - `spectrum(method="fourier")` takes no extra arguments (`Channel.fourier`
+    has none). Fourier grids depend on test length, so the docstring points to
+    Welch with a fixed `nperseg` for heatmaps.
+  - Shared missing-channel lookup (`_find_channels`) now serves `metric`,
+    `transfer_function` and `spectrum`; the `metric` warning text is unchanged.
 
 ## Found but not fixed
 
@@ -208,11 +242,40 @@ CampaignResult (Stage 2)").
   residual window, the unit check and connected lines across skipped numbers
   (125 tests in total).
 
+### Stage 3
+
+Done 2026-10-29. Commit: see `git log` (message "Add curve results:
+transfer_function, spectrum, overlay, heatmap (Stage 3)").
+
+- Changed `src/pydysp/result.py`: `CampaignResult` gains curve mode (`freq`,
+  `is_curve`, `curve()`, `common_freq()`, `peak_frequency()`), curve
+  `to_array()` (2D) and `to_csv(part=)` (frequency down the rows, one column per
+  test), and `plot(kind="overlay"|"heatmap", fmin=, fmax=, part=, legend=,
+  colorbar=)`. Every plot returns the `ax` it drew on.
+- Changed `src/pydysp/campaign.py`: `transfer_function(x, y, kind="H1",
+  tests=None, processed=True, strict=False, **csd_kwargs)`,
+  `spectrum(channel, method="welch"|"fourier", tests=None, ...)`, and private
+  helpers `_for_tests`, `_find_channels` (shared with `metric`).
+- Added `tests/test_curves.py`: 20 tests (143 in total; pass on 3.13 and 3.11).
+  Synthetic white-noise tests with a resonance that drops through the
+  campaign. They cover agreement with `Test.transfer_function` and
+  `Channel.welch_psd`/`fourier`, `tests=`, missing channels (NaN/None and
+  `strict=True`), `peak_frequency` tracking the resonance, curve transforms and
+  type errors, different grids (overlay works; heatmap, `to_array` and `to_csv`
+  raise), curve CSV (magnitude and phase), overlay labels and options, heatmap
+  rows, labels, colour bar and masking.
+- Whole repo: `ruff` and `black` clean; Sphinx 0 warnings.
+- Look first at: the one-class design (Open questions), the heatmap's y-axis
+  (stripes in campaign order labelled with real numbers), and complex values
+  shown as magnitude by default.
+
 ## Next step
 
 State exactly what the next session should do first.
 
-Wait for the author's review of Stage 2 and answers to the open questions. Then
-read `design-results.md` (curve results) and start Stage 3: `transfer_function`,
-`spectrum`, overlay and heatmap plots, `peak_frequency`, and curve `to_csv`. The
-result class will need a frequency axis and 2-D values.
+Wait for the author's review of Stage 3 and answers to the open questions. Then
+read `delivery.md` (documentation) and start Stage 4: `docs/source/campaign.rst`
+(autodoc for `Campaign` and `CampaignResult`), the "Campaigns" section in
+`quickstart.rst`, `docs/source/examples.rst` (links to both notebooks on GitHub
+and Binder, per the Decisions table), and the `index.rst` and README entries.
+State in the docs that `"max_abs"` is signed and `.abs()` gives the magnitude.
