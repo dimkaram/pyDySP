@@ -4,7 +4,7 @@ Installation
 Stable release
 --------------
 
-Install the latest version from PyPI:
+pyDySP requires Python 3.11 or newer. Install the latest version from PyPI:
 
 .. code-block:: bash
 

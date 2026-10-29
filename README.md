@@ -113,7 +113,7 @@ conda activate pydysp
 
 ## Dependencies
 
-Required:
+Python 3.11 or newer. Required packages:
 
 - numpy  
 - scipy  
