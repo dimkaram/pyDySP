@@ -34,4 +34,4 @@ __all__ = [  # noqa: RUF022 - grouped by category, not alphabetical
     "annotate_response_peak",
     "downsample",
 ]
-__version__ = "0.2.2"
+__version__ = "0.3.0"

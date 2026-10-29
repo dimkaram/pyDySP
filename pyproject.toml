@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyDySP"
-version = "0.2.2"
+version = "0.3.0"
 description = "Python Dynamic Signal Processing"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
