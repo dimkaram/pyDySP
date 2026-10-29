@@ -13,10 +13,15 @@ from typing import Any
 import numpy as np
 from tabulate import tabulate
 
+from .channel import Channel
+from .result import CampaignResult
 from .test import Test
 
 # Loader signature: path -> Test
 Loader = Callable[[str], Test]
+
+# Metric signature: Channel -> number
+MetricFunction = Callable[..., float]
 
 # Maximum length of a text ``meta`` value written by ``test_info_to_csv``.
 _MAX_TEXT_LEN = 80
@@ -1023,6 +1028,140 @@ class Campaign:
                 parts.extend(nums)
         return ", ".join(parts)
 
+    # ------------------------------------------------------------------ #
+    # Results
+    # ------------------------------------------------------------------ #
+
+    def metric(
+        self,
+        channel: str,
+        what: str | MetricFunction,
+        processed: bool = True,
+        strict: bool = False,
+        label: str | None = None,
+        units: str | None = None,
+        **kwargs: Any,
+    ) -> CampaignResult:
+        """
+        Reduce one channel in each test to one number.
+
+        Parameters
+        ----------
+        channel : str
+            Channel name (``name_user`` or ``name_input``), as used by
+            ``test[channel]``. Use names rather than integer positions, which
+            shift silently if the channel layout changes.
+        what : str or callable
+            Built-in metric name:
+
+            * ``"max"``: largest value.
+            * ``"min"``: smallest value.
+            * ``"max_abs"``: value at the largest absolute amplitude, with its
+              sign, as :meth:`Channel.max_abs`. Use ``.abs()`` on the result
+              for the magnitude.
+            * ``"rms"``: root-mean-square value.
+            * ``"residual"``: mean of the last ``n_last`` samples (default
+              100), for example the residual displacement after a test.
+
+            Alternatively, any function that receives a :class:`Channel` and
+            returns a number. Extra keyword arguments are passed to it.
+        processed : bool, optional
+            Use processed data for the built-in metrics (default ``True``).
+            A custom function receives the channel and decides itself.
+        strict : bool, optional
+            If ``True``, a test without ``channel`` raises :class:`KeyError`.
+            By default its value is NaN and a warning is emitted.
+        label : str, optional
+            Label of the result. Default: the channel name.
+        units : str, optional
+            Units of the result. Default: the channel units.
+        **kwargs
+            Passed to the metric, for example ``n_last=200`` for
+            ``"residual"``.
+
+        Returns
+        -------
+        CampaignResult
+            One value per test, with test numbers, names, label and units.
+
+        Raises
+        ------
+        ValueError
+            If ``what`` is an unknown metric name.
+        KeyError
+            If ``strict=True`` and a test lacks ``channel``.
+        TypeError
+            If the metric does not return a number.
+
+        Examples
+        --------
+        >>> a_max = camp.metric("A1", "max_abs")  # doctest: +SKIP
+        >>> d_acc = camp.metric("L1", "residual").abs().cumsum()  # doctest: +SKIP
+        """
+        if isinstance(what, str):
+            try:
+                func = _METRICS[what]
+            except KeyError:
+                raise ValueError(
+                    f"Unknown metric {what!r}; choose from "
+                    f"{', '.join(map(repr, _METRICS))} or pass a function."
+                ) from None
+            what_name = what
+            call_kwargs = {"processed": processed, **kwargs}
+        elif callable(what):
+            func = what
+            what_name = getattr(what, "__name__", "")
+            if what_name == "<lambda>":
+                what_name = ""
+            call_kwargs = dict(kwargs)
+        else:
+            raise TypeError("what must be a metric name or a function.")
+
+        values = np.full(len(self.tests), np.nan)
+        missing: list[int] = []
+        first: Channel | None = None
+        for i, (num, t) in enumerate(zip(self.numbers, self.tests)):
+            try:
+                ch = t[channel]
+            except KeyError:
+                if strict:
+                    raise KeyError(
+                        f"Channel '{channel}' not found in test {num}."
+                    ) from None
+                missing.append(num)
+                continue
+            if first is None:
+                first = ch
+            val = func(ch, **call_kwargs)
+            try:
+                values[i] = float(val)
+            except (TypeError, ValueError):
+                raise TypeError(
+                    f"Metric returned {type(val).__name__} for test {num}, "
+                    "expected a number."
+                ) from None
+        if missing:
+            warnings.warn(
+                f"Channel '{channel}' missing in tests "
+                f"{', '.join(map(str, missing))}; values set to NaN.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if label is None:
+            label = (first.name_user or first.name_input) if first else None
+            label = label or str(channel)
+        if units is None and first is not None:
+            units = first.units
+        return CampaignResult(
+            values=values,
+            numbers=list(self.numbers),
+            names=self.names,
+            label=label,
+            units=units,
+            what=what_name,
+            meta=[t.meta for t in self.tests],
+        )
+
 
 # ---------------------------------------------------------------------- #
 # Module helpers
@@ -1264,3 +1403,47 @@ def _channel_keys(test: Test) -> list[str]:
         if key:
             keys.append(key)
     return keys
+
+
+# ---------------------------------------------------------------------- #
+# Built-in metrics
+# ---------------------------------------------------------------------- #
+
+
+def _metric_max(ch: Channel, processed: bool = True) -> float:
+    """Largest value."""
+    return ch.max_value(processed=processed)[1]
+
+
+def _metric_min(ch: Channel, processed: bool = True) -> float:
+    """Smallest value."""
+    return ch.min_value(processed=processed)[1]
+
+
+def _metric_max_abs(ch: Channel, processed: bool = True) -> float:
+    """Value (with sign) at the largest absolute amplitude."""
+    return ch.max_abs(processed=processed)[1]
+
+
+def _metric_rms(ch: Channel, processed: bool = True) -> float:
+    """Root-mean-square value."""
+    return ch.rms(processed=processed)
+
+
+def _metric_residual(ch: Channel, processed: bool = True, n_last: int = 100) -> float:
+    """Mean of the last ``n_last`` samples."""
+    if n_last < 1:
+        raise ValueError(f"n_last must be at least 1, got {n_last}.")
+    _, y = ch.xy(processed=processed)
+    if y.size == 0:
+        raise ValueError("Cannot compute residual of empty signal")
+    return float(np.mean(y[-n_last:]))
+
+
+_METRICS: dict[str, MetricFunction] = {
+    "max": _metric_max,
+    "min": _metric_min,
+    "max_abs": _metric_max_abs,
+    "rms": _metric_rms,
+    "residual": _metric_residual,
+}

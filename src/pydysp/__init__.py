@@ -11,6 +11,7 @@ from .helpers import (
     annotate_time_peak,
 )
 from .response import ResponseSpectrum
+from .result import CampaignResult
 from .spectra import FourierSpectrum, WelchSpectrum
 from .test import Test
 
@@ -24,6 +25,7 @@ __all__ = [  # noqa: RUF022 - grouped by category, not alphabetical
     "WelchSpectrum",
     "AriasResult",
     "ResponseSpectrum",
+    "CampaignResult",
     # Helper functions
     "annotate_peak",
     "annotate_time_peak",

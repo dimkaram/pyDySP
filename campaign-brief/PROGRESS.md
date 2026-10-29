@@ -28,7 +28,7 @@ Keep entries short and factual. Do not delete earlier entries.
 ## Stages
 
 - [x] Stage 1: Core `Campaign` (`design-campaign.md`)
-- [ ] Stage 2: Scalar results and plotting (`design-results.md`)
+- [x] Stage 2: Scalar results and plotting (`design-results.md`)
 - [ ] Stage 3: Curve results (`design-results.md`)
 - [ ] Stage 4: Documentation (`delivery.md`)
 - [ ] Stage 5: Notebooks (`delivery.md`)
@@ -59,31 +59,62 @@ date and the decision.
 | 2026-10-28 | 1 | `check_channels()` labels | Tests labelled by real numbers. Ranges `a-b` = 3 or more consecutive tests in campaign order. Reports the shorter of "missing in" / "present only in". Duplicate channel names within a test are also reported. |
 | 2026-10-28 | 1 | Campaign name default | Folder name for `from_folder`, empty string otherwise. |
 | 2026-10-28 | 1 | Python 3.10 syntax | Avoid 3.11-only features until Stage 6 so CI stays green. |
+| 2026-10-29 | 1 | The six Stage 1 choices Claude Code made (`numbers=` + `number_from=` raises; `from_tests(numbers=)`; recursive search sorted by relative path; clashing meta keys skipped with a warning; `with_channel_info_from_csv` warns on no match; channels identified by `name_user`, else `name_input`, case-insensitive) | Approved; keep all. |
+| 2026-10-29 | all | Pre-existing ruff/black/Sphinx issues | Fix them in three separate housekeeping commits before Stage 2 (black, then ruff, then Sphinx). Ruff defaults only, no stricter rules; anything not provably identical gets a targeted `noqa` and is listed here for review. |
+| 2026-10-29 | 4, 5 | Notebooks in the docs (**overrides delivery.md**) | Sphinx does not build `demo.ipynb` today, so add no notebook extension and no new docs dependency. In Stage 4, add `docs/source/examples.rst` (in the toctree) linking both notebooks on GitHub and their Binder links. This replaces "add both notebooks to the docs toctree". |
+| 2026-10-29 | 6 | Lint in CI | When editing the CI matrix in Stage 6, also add `ruff check` and `black --check` steps to `.github/workflows/tests.yml`, as a separate commit so it can be dropped. |
+| 2026-10-29 | all | Scope of "ruff and black must pass" | Applies to the whole repo from now on. |
 
 ## Open questions for the author
 
 List anything waiting for an answer. Remove it once answered, and move the answer
 to Decisions.
 
-- Stage 1 choices made by Claude Code without an explicit ruling (please confirm):
-  - `numbers=` and `number_from=` both given raises `ValueError` (the brief lists
-    them as a priority order; silently ignoring one seemed error-prone).
-  - `from_tests` accepts `numbers=` as well as `name=`.
-  - `from_folder` with `recursive=True` matches the pattern against file names
-    and sorts by path relative to the folder (sub-folder, then file, natural
-    order).
-  - Meta keys that clash with standard CSV columns (for example `meta["date"]`)
-    are not exported, with a warning.
-  - `with_channel_info_from_csv(numbers=...)` warns if no test matches.
-  - Channels are identified across tests by `name_user`, else `name_input`,
-    case-insensitively (as `Test.__getitem__` does).
-- Pre-existing ruff/black failures (see baseline): should the "ruff and black
-  must pass" rule apply to new and changed code only? A repo-wide fix would touch
-  `Channel`/`Test` files and is out of scope unless you want a separate commit.
-- `demo.ipynb` is not in the Sphinx docs at present, so Stage 5's "follow how
-  `demo.ipynb` is handled now" has nothing to follow. Decide before Stage 5
-  whether to add nbsphinx or myst-nb (new docs dependency) or just link the
-  notebooks.
+- **Ruff findings left with `noqa` (housekeeping commit `59ab231`), for you to
+  decide.** Each has a reason in the code:
+  - `src/pydysp/__init__.py`: RUF022, `__all__` not sorted. It is grouped by
+    category with comments; sorting would lose that.
+  - `src/pydysp/channel.py` (`response_spectrum`, `plot_response_spectrum`):
+    B008, `periods=np.linspace(0.05, 5.0, 100)` default. Changing it to
+    `None` alters the public signature. Note: `response_spectrum` stores this
+    shared default array as `ResponseSpectrum.T` without copying, so a user who
+    edits `spec.T` in place changes the default for later calls. A real fix
+    (`periods=None` and build the grid inside) is small; say if you want it.
+  - `src/pydysp/test.py`: UP007 on `ChannelKey` and `ChannelSelector`, and UP035
+    on the `typing` import that carries `Sequence`. Using `|` or
+    `collections.abc.Sequence` would change the runtime value of these public
+    aliases.
+  - `src/pydysp/test.py`: BLE001 (`except Exception`) in four MAT-header parse
+    helpers in `from_sofsi_mat` and `from_equals_mat`. Header values are
+    arbitrary MAT objects, so narrowing the exceptions could make loading fail
+    on files that load today.
+  - `src/pydysp/test.py`: BLE001 in `channel_health`, which deliberately reports
+    any per-channel failure as a table row.
+- **Stage 2 choices made without an explicit ruling (please confirm):**
+  - `"max_abs"` returns the value **with its sign**, as `Channel.max_abs()[1]`
+    does. For a symmetric signal it is often negative. Use `.abs()` for the
+    magnitude. Alternative: make `"max_abs"` return `|value|`.
+  - The residual metric is named `"residual"`, with `n_last=100` samples by
+    default (`camp.metric("L1", "residual", n_last=500)`). Is 100 a sensible
+    default, or should `n_last` be required?
+  - Result class `CampaignResult` in new module `src/pydysp/result.py`, exported
+    as `pydysp.CampaignResult`. Results store a copy of each test's `meta`, so
+    `plot(x="amp")` works without the campaign.
+  - Built-ins take `processed=True` (passed to the `Channel` method); a custom
+    function gets the channel plus any extra keyword arguments.
+  - `.cumsum()` skips NaN: a missing test adds nothing and stays NaN, rather than
+    making every later value NaN.
+  - Arithmetic between results requires the same test numbers in the same order,
+    otherwise `ValueError`. Labels and units combine (`"F1 / L1"`, `"kN/mm"`); for
+    `+` and `-` the units are kept only if equal.
+  - `plot()` uses `marker="o"` by default (overridable), so isolated points
+    between gaps stay visible. Gaps (`gaps=True`) apply only to the test-number
+    x-axis; any jump in numbers breaks the line, including after a `select`.
+  - `highlight=` accepts one number or a list. It draws a hollow square in the
+    line's colour, 1.6 times the marker size. An unknown number raises `KeyError`.
+  - With a test-number x-axis, ticks are set to integers (`MaxNLocator`).
+  - Plots return `(fig, ax)` as the brief says. Note that
+    `Test.plot_transfer_function` actually returns only `ax`; it is unchanged.
 
 ## Stage log
 
@@ -109,11 +140,55 @@ Done 2026-10-28. Commit: see `git log` (message "Add Campaign class (Stage 1)").
 - `ruff` and `black` clean on the new files. `Channel` and `Test` untouched.
 - Look first at: number handling in `from_files`, `with_test_info_from_csv`
   type parsing, and the `check_channels()` wording.
+- Approved 2026-10-29. Commit `2640cd9`.
+
+### Housekeeping (before Stage 2)
+
+Three separate commits, 2026-10-29. `python -m pytest`: 101 passed after each,
+with the existing tests' assertions unchanged.
+
+- `326cf83` Format existing files with black: removes one blank line in each of
+  5 files. Formatting only.
+- `59ab231` Fix ruff findings with default rules: 130 to 0. 119 safe auto-fixes
+  (annotation syntax, import order, two merged if/elif branches). Manual
+  changes, behaviour identical: `ClassVar` annotations on the three `Channel`
+  `*_DEFAULTS` dicts; `in dict` instead of `in dict.keys()`; one
+  `except Exception` around `int(str)` narrowed to `ValueError`; three unused
+  unpacked test variables prefixed with `_`. 11 `noqa` (see Open questions).
+  Public signatures, defaults, dataclass fields and type aliases were compared
+  before and after: identical.
+- `7d1dd05` Fix the two Sphinx build warnings: remove the `html_static_path`
+  entry for the missing `_static` folder, and add the blank line before a
+  bullet list in the `AriasResult` docstring. Build now has 0 warnings.
+
+### Stage 2
+
+Done 2026-10-29. Commit: see `git log` (message "Add Campaign.metric and
+CampaignResult (Stage 2)").
+
+- Added `src/pydysp/result.py`: `CampaignResult` (values, numbers, names, label,
+  units, what, meta), `value(number)`, `axis_label`, `abs()`/`abs`/negation,
+  `cumsum()`, `+ - * /` with numbers and other results, `to_array()`,
+  `to_table()`, `to_csv()`, `plot(x=, ax=, highlight=, origin=, gaps=, xlabel=,
+  ylabel=, label=, **plot_kwargs)` returning `(fig, ax)`.
+- Changed `src/pydysp/campaign.py`: `Campaign.metric(channel, what,
+  processed=True, strict=False, label=None, units=None, **kwargs)` with
+  built-ins `max`, `min`, `max_abs`, `rms`, `residual`; a missing channel gives
+  NaN and one warning, or `KeyError` with `strict=True`.
+- Changed `src/pydysp/__init__.py`: export `CampaignResult`.
+- Added `tests/test_result.py`: 22 tests (123 in total). They cover each
+  built-in, custom functions, missing channels (NaN and `strict=True`), every
+  transform and arithmetic case, export, and plots (labels, `ax=`, gaps,
+  `highlight`, `x=` result and meta key, `origin`, NaN).
+- Whole repo: `ruff` and `black` clean; Sphinx 0 warnings; Python 3.13 and 3.11.
+- Look first at: the `max_abs` sign and `residual` default (Open questions),
+  and the look of `highlight` in a real figure.
 
 ## Next step
 
 State exactly what the next session should do first.
 
-Wait for the author's review of Stage 1 and answers to the open questions. Then
-read `design-results.md` (scalar results, plotting) and propose a plan for
-Stage 2.
+Wait for the author's review of Stage 2 and answers to the open questions. Then
+read `design-results.md` (curve results) and start Stage 3: `transfer_function`,
+`spectrum`, overlay and heatmap plots, `peak_frequency`, and curve `to_csv`. The
+result class will need a frequency axis and 2-D values.
