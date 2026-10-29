@@ -30,3 +30,24 @@ def test_response_spectrum_result_does_not_alias_user_periods():
     rs = ch.response_spectrum(periods=periods)
     rs.T[0] = 42.0
     np.testing.assert_array_equal(periods, [0.1, 0.5, 1.0])
+
+
+# ----------------------------------------------------------------------
+# Test.info: channel-table columns match their headers
+# ----------------------------------------------------------------------
+
+
+def test_test_info_channel_table_columns_match_headers():
+    from pydysp.test import Test
+
+    ch = Channel(
+        data=np.zeros(10), dt=0.1, name_user="Acc1", name_input="DAQ_07", units="g"
+    )
+    info = Test(name="T", channels=[ch]).info()
+    lines = [ln for ln in info.splitlines() if ln.startswith("|")]
+    header = [c.strip() for c in lines[0].strip("|").split("|")]
+    row = [c.strip() for c in lines[2].strip("|").split("|")]
+    columns = dict(zip(header, row))
+    assert columns["name_user"] == "Acc1"
+    assert columns["name_input"] == "DAQ_07"
+    assert columns["units"] == "g"

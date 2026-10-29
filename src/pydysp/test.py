@@ -493,8 +493,8 @@ class Test:
             table_rows.append(
                 [
                     i,
-                    ch.name_input or "-",
                     ch.name_user or "-",
+                    ch.name_input or "-",
                     ch.quantity or "-",
                     ch.units or "-",
                     ch.description_long or "-",
