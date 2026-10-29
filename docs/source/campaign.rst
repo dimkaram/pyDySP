@@ -25,6 +25,11 @@ Conventions
   and returns those axes. Pass ``ax=`` to draw into your own subplot; the
   figure is ``ax.figure``. No figure size, font or colour scheme is set, so
   your Matplotlib style applies.
+* **Tags.** ``from_folder`` and ``from_files`` only add the tags the loader
+  sets itself (for example ``"sofsi"`` from ``Test.from_sofsi_mat``). Other
+  tags, such as ``"hammer"`` or ``"white-noise"``, come from ``tags=`` or
+  from the test-info CSV (``with_test_info_from_csv``), so give them before
+  selecting with ``select(tags=...)`` or ``exclude_tags=...``.
 * **Missing channels.** A test without the requested channel gives NaN (or no
   curve) and a warning; ``strict=True`` raises :class:`KeyError` instead.
   Refer to channels by name, not by integer position.

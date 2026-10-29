@@ -199,18 +199,25 @@ camp = Campaign.from_folder(
     "data/shallow_foundation",              # *.mat, natural sort order
     loader=Test.from_sofsi_mat,
     number_from="SH2601_{number}_*",        # test numbers from file names
-)
+).with_test_info_from_csv("tests.csv")      # descriptions and tags (see below)
 tests = camp.select(exclude_tags={"hammer"})
 
 a_max = tests.metric("A1", "max_abs")       # signed, like Channel.max_abs()
 ax = a_max.plot(highlight=21)               # value against test number
 
-tf = tests.transfer_function("A8", "A14", nperseg=1024)
+tf = camp.select(tags={"white-noise"}).transfer_function("A8", "A14", nperseg=1024)
 ax = tf.plot(kind="heatmap", fmax=40)       # test number vs frequency
 tf.peak_frequency(fmin=5, fmax=40).plot(ax=ax, color="w")
+```
 
-camp.test_info_to_csv("tests.csv")          # edit, then reload with
-camp = camp.with_test_info_from_csv("tests.csv")
+`tests.csv` holds one row per test (edit it in any spreadsheet program;
+`camp.test_info_to_csv("tests.csv")` writes the current information):
+
+```text
+number,description,tags
+1,Hammer test,hammer
+3,White noise 0.05g,white-noise
+21,Record 901,record
 ```
 
 Plot methods return the Matplotlib `Axes` they drew on (the figure is `ax.figure`).
