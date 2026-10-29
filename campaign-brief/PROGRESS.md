@@ -85,26 +85,16 @@ date and the decision.
 | 2026-10-29 | 5 | README notebooks | Binder link for the new notebook next to the existing one; both described in "Example Notebooks". |
 | 2026-10-29 | 5 | Notebook style and execution | Shared skeleton from delivery.md; `demo.ipynb` light touch only; moderate figure sizes. nbconvert/ipykernel installed in the session only. Both executed top to bottom from a clean checkout with only the normal dependencies, outputs saved, no errors or warnings, no files left behind. |
 | 2026-10-29 | 5, 6 | Printed version in the notebooks | Stays 0.2.2 during Stage 5. In Stage 6, after the 0.3.0 bump, re-execute both notebooks so the printed version and outputs are current. |
+| 2026-10-29 | 5 | Stage 5 `e03e09e` | Approved. |
+| 2026-10-29 | 5 | `demo.ipynb` and `data/demo_*.csv` (**goes beyond the agreed light touch**) | Option (c): the final cell of `demo.ipynb` now writes to a `tempfile.TemporaryDirectory` (and cleans it up), so running it leaves no files behind; `import os` and `import tempfile` added to its imports cell. `data/demo_data.csv` and `data/demo_channel_info.csv` deleted after a repo-wide search found no other reference (tests, docs, README, notebooks, workflows, `pyproject.toml`; no MANIFEST/setup files). Reason: re-running the notebook rewrote these tracked files with noisy diffs (CRLF and small numeric differences). |
+| 2026-10-29 | 6 | Stage 6 scope (author's instructions) | Separate commits: Python 3.11 minimum and CI matrix; CI lint steps; 0.3.0; re-executed notebooks; then build checks (not committed), a scale smoke test (not committed), a whole-branch review with small fixes, three bug-fix commits (response_spectrum copy, Test.info columns, CSV-name docs), PR materials (not committed) and a final commit removing `CLAUDE.md` and `campaign-brief/`. No tags, no uploads, no issues, no pushes outside the working branch. |
 
 ## Open questions for the author
 
 List anything waiting for an answer. Remove it once answered, and move the answer
 to Decisions.
 
-- **`demo.ipynb` rewrites tracked files in `data/`.** Its last cell (unchanged,
-  light touch) saves to `../data/demo_data.csv` and
-  `../data/demo_channel_info.csv`, which are committed files. Re-executing it
-  from a clean checkout modifies both: the committed copies have CRLF line
-  endings, and the data values differ by up to 0.008 (out of a range of
-  about 10), probably from older library versions or a Windows run. No new files
-  are created. In this commit the `data/` files are left as they were (the
-  executed notebook's printed output does not show the values, so it does not
-  disagree with them). Options: (a) leave as is; (b) commit the regenerated
-  files; (c) change that cell to write to a temporary folder, as the new
-  notebook does, and delete `data/demo_*.csv` (a content change beyond the light
-  touch). Recommendation: (c) in Stage 6 or a follow-up, because it makes
-  "leave no files behind" true for both notebooks and avoids noisy diffs on
-  every re-run; (a) is fine if you prefer to keep the demo exactly as it is.
+- None at present.
 
 ## Found but not fixed
 
