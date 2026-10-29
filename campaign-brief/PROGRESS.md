@@ -32,7 +32,7 @@ Keep entries short and factual. Do not delete earlier entries.
 - [x] Stage 3: Curve results (`design-results.md`)
 - [x] Stage 4: Documentation (`delivery.md`)
 - [x] Stage 5: Notebooks (`delivery.md`)
-- [ ] Stage 6: Release preparation (`delivery.md`)
+- [x] Stage 6: Release preparation (`delivery.md`)
 
 Mark a stage done only when its tests pass, `ruff` and `black` are clean, and it
 is committed.
@@ -88,6 +88,9 @@ date and the decision.
 | 2026-10-29 | 5 | Stage 5 `e03e09e` | Approved. |
 | 2026-10-29 | 5 | `demo.ipynb` and `data/demo_*.csv` (**goes beyond the agreed light touch**) | Option (c): the final cell of `demo.ipynb` now writes to a `tempfile.TemporaryDirectory` (and cleans it up), so running it leaves no files behind; `import os` and `import tempfile` added to its imports cell. `data/demo_data.csv` and `data/demo_channel_info.csv` deleted after a repo-wide search found no other reference (tests, docs, README, notebooks, workflows, `pyproject.toml`; no MANIFEST/setup files). Reason: re-running the notebook rewrote these tracked files with noisy diffs (CRLF and small numeric differences). |
 | 2026-10-29 | 6 | Stage 6 scope (author's instructions) | Separate commits: Python 3.11 minimum and CI matrix; CI lint steps; 0.3.0; re-executed notebooks; then build checks (not committed), a scale smoke test (not committed), a whole-branch review with small fixes, three bug-fix commits (response_spectrum copy, Test.info columns, CSV-name docs), PR materials (not committed) and a final commit removing `CLAUDE.md` and `campaign-brief/`. No tags, no uploads, no issues, no pushes outside the working branch. |
+| 2026-10-29 | 6 | The three "Found but not fixed" items (**overrides "Found but not fixed"**) | Fixed on this branch as three separate commits with tests, public API and signatures unchanged; no issues raised. They go under "Other fixes" in the PR description. |
+| 2026-10-29 | 6 | Python 3.11 statement in the docs | README "Dependencies" and `installation.rst` now say "Python 3.11 or newer" (no document stated a range before). |
+| 2026-10-29 | 6 | Rendering of defaults in the API docs | `autodoc_preserve_defaults = True` in `conf.py` (review clean-up), so `loader=Test.from_sofsi_mat` and `periods=np.linspace(...)` render as written. |
 
 ## Open questions for the author
 
@@ -98,29 +101,36 @@ to Decisions.
 
 ## Found but not fixed
 
-Problems in existing code found while working on this branch. They are out of
-scope here; the author will raise separate issues.
+Problems found while working on this branch and left for later.
 
-- `Channel.response_spectrum` (and `plot_response_spectrum`): the default
-  `periods=np.linspace(0.05, 5.0, 100)` is created once, at import, and
-  `response_spectrum` passes it through `np.asarray` (no copy) into the returned
-  `ResponseSpectrum.T`. Editing `spec.T` in place therefore changes the default
-  grid for every later call. Fix: `periods=None` and build the grid inside, or
-  copy the array.
-- `Test.to_csv` / `Test.from_csv` do not round-trip channel names when a
-  channel has units. With the default `include_axis_labels=True` the column
-  header is `label_axis` (for example `"A1 [g]"`), and `from_csv` then names the
-  channel `"A1 [g]"`; with `include_axis_labels=False` the headers are
-  `Ch1, Ch2, ...`. So `test["A1"]` fails after a CSV round trip. Found while
-  checking the Stage 4 doc snippets; Campaign code is not affected. (Possible
-  fix: write `name_user` as the header and units in a second row or a sidecar
-  file.)
+- **`Campaign.info()` processes every channel.** It shows each test's
+  duration through `Test.duration`, which calls `Channel.processed()` on every
+  channel (deliberately, since trimming changes the duration). With a
+  processing loader chain this processes and caches the whole campaign: in the
+  scale test (35 tests x 30 channels x 30,000 samples, drift correction and
+  filter in the loader) `info()` took 2.7 s and added about 235 MB, more than
+  every analysis step combined. Possible fixes: use the first channel's
+  duration only, or the raw duration. Not changed (no optimisation without
+  the author's go-ahead).
+- **setuptools license metadata deprecation** (existing `pyproject.toml`):
+  `license = { file = "LICENSE" }` and the `License :: OSI Approved :: MIT
+  License` classifier trigger setuptools warnings; builds stop being supported
+  after 2027-02-18. Fix: `license = "MIT"` and `license-files = ["LICENSE"]`,
+  and drop the classifier.
+- **Unpinned lint tools in CI.** `ruff` and `black` in the `dev` extra are not
+  pinned, so the new CI lint steps can fail when a new release changes its
+  defaults or style. Pinning (or a pre-commit config with fixed revisions)
+  would avoid that.
 
-- `Test.info()`: the channel table's `name_user` and `name_input` columns are
-  swapped. The header lists `name_user, name_input`, but each row writes
-  `ch.name_input` then `ch.name_user` (`src/pydysp/test.py`, around lines
-  483 and 496). Found while building the campaign notebook, which therefore
-  does not print `Test.info()`.
+### Fixed on this branch (formerly "Found but not fixed")
+
+- `Channel.response_spectrum` shared its default `periods` array with the
+  returned `ResponseSpectrum.T`: fixed in `a16efb1` (copy with `np.array`).
+- `Test.info()` channel table had `name_user` and `name_input` swapped: fixed
+  in `eeddca4` (rows follow the header).
+- `Test.to_csv`/`from_csv` do not preserve names and units by themselves: by
+  design; documented in `a69259a` (docstring Notes and quickstart section with
+  `from_csv(...).with_channel_info_from_csv(...)`).
 
 ## Plot-method audit (2026-10-29)
 
@@ -323,14 +333,59 @@ and examples page (Stage 5)").
 - Look first at: the campaign notebook's figures and wording, the `data/`
   question under Open questions, and the README badge.
 
+### Stage 6
+
+Done 2026-10-29. Commits, in order:
+
+- `648f6c5` Write demo.ipynb CSV round trip to a temporary folder (and delete
+  `data/demo_*.csv`).
+- `459d059` Require Python 3.11 or newer; test on 3.11 to 3.13.
+- `2c0ba12` Add ruff and black checks to the test workflow.
+- `82e392c` Bump version to 0.3.0.
+- `7ba054d` Re-execute example notebooks on 0.3.0.
+- `d2e6b15` Review clean-ups: private type aliases, clearer message, doc
+  defaults.
+- `a16efb1` Fix response_spectrum sharing its default periods array.
+- `eeddca4` Fix swapped name columns in the Test.info() channel table.
+- `a69259a` Document how to restore channel names after a CSV round trip.
+- `815df58` Re-execute example notebooks after the Test.info() fix.
+
+Checks (not committed):
+
+- Python 3.11 minimum: ruff and black now target 3.11 and report no new
+  findings; tests pass on 3.11 and 3.13.
+- Build: `python -m build` (setuptools 84) gives `pydysp-0.3.0.tar.gz` and
+  `pydysp-0.3.0-py3-none-any.whl`; `twine check` passes both. Both contain
+  `pydysp/campaign.py` and `pydysp/result.py`; the sdist has no working files.
+  The wheel installs in a fresh Python 3.13 environment and
+  `import pydysp; pydysp.Campaign` works. Built from a clean copy; no
+  `dist/`, `build/` or `*.egg-info` tracked. Setuptools warns about the license
+  metadata (see "Found but not fixed").
+- Notebooks: executed from a clean, non-editable copy on Python 3.11; no errors
+  or warnings; the copy has no tracked or untracked changes afterwards; both
+  print 0.3.0.
+- Scale smoke test (35 tests x 30 channels x 30,000 samples, SoFSI `.mat`
+  files totalling 261 MB, 4 CPUs, 15 GB RAM): `from_folder` 1.9 s; `metric`
+  on one channel < 0.01 s, `rms` on all 30 channels 0.05 s;
+  `transfer_function` (nperseg 4096) 0.22 s; heatmap with `peak_frequency`
+  overlay and PNG render 0.13 s; overlay of 35 lines 0.21 s; Welch spectrum
+  0.06 s; peak RSS 391 MB (baseline 128 MB). With a drift-correction and
+  filter loader chain: same timings except `Campaign.info()` 2.7 s, peak RSS
+  631 MB (see "Found but not fixed").
+- Review of `git diff main...HEAD`: everything intended is exported and
+  documented; no private names leaked after the clean-up commit; docstrings
+  match the decisions; no stray files, debug code, TODOs, or references to the
+  working files in code, docs or notebooks.
+
+Totals: 151 tests (52 original, unmodified apart from the lint-only changes
+in `59ab231`; 99 new). ruff and black clean; Sphinx 0 warnings.
+
 ## Next step
 
 State exactly what the next session should do first.
 
-Wait for the author's review of Stage 5 and the `data/` question. Then read
-`delivery.md` (release preparation) and start Stage 6, as separate commits:
-Python 3.11 minimum (`requires-python`, classifiers, tool settings, docs);
-the CI matrix 3.11, 3.12, 3.13; the separate commit adding `ruff check` and
-`black --check` to `tests.yml`; the 0.3.0 bump in `pyproject.toml` and
-`__init__.py`; re-execute both notebooks so the printed version is 0.3.0; then
-`python -m build`, `twine check` and the Sphinx build. Never tag or upload.
+All stages are done. The next commit removes `CLAUDE.md` and
+`campaign-brief/` before the pull request. To restore them:
+`git checkout <last commit that contains them> -- CLAUDE.md campaign-brief`.
+The author opens the pull request, merges, checks the docs, and then tags
+`v0.3.0` (which publishes to PyPI).
